@@ -1,0 +1,156 @@
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
+let accessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  accessToken = token;
+  if (token) {
+    localStorage.setItem('accessToken', token);
+  } else {
+    localStorage.removeItem('accessToken');
+  }
+}
+
+export function getAccessToken(): string | null {
+  if (!accessToken) {
+    accessToken = localStorage.getItem('accessToken');
+  }
+  return accessToken;
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (res.status === 401 && path !== '/auth/refresh') {
+    // Try refresh
+    try {
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        setAccessToken(data.data.accessToken);
+        // Retry original request
+        const retryRes = await fetch(`${API_BASE}${path}`, {
+          ...options,
+          headers: { ...headers, Authorization: `Bearer ${data.data.accessToken}` },
+          credentials: 'include',
+        });
+        return retryRes.json();
+      }
+    } catch { /* refresh failed */ }
+    setAccessToken(null);
+  }
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(error.message || `HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+  put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+  patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+};
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+export const authApi = {
+  register: (body: { fullName: string; email: string; password: string }) =>
+    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/register', body),
+  login: (body: { email: string; password: string }) =>
+    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/login', body),
+  googleAuth: (credential: string) =>
+    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/google', { credential }),
+  logout: () => api.post('/auth/logout'),
+  me: () => api.get<{ success: boolean; data: UserData }>('/auth/me'),
+};
+
+// ─── Products ────────────────────────────────────────────────────────────────
+export const productApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api.get<{ success: boolean; data: any[]; pagination: any }>(`/products${qs}`);
+  },
+  featured: () => api.get<{ success: boolean; data: any[] }>('/products/featured'),
+  get: (slug: string) => api.get<{ success: boolean; data: any }>(`/products/${slug}`),
+  reviews: (productId: string) => api.get<{ success: boolean; data: any[] }>(`/products/${productId}/reviews`),
+  createReview: (productId: string, body: { rating: number; title?: string; body: string }) =>
+    api.post(`/products/${productId}/reviews`, body),
+  // ── Admin CRUD ─────────────────────────────────────────────────────────────
+  create: (body: any) =>
+    api.post<{ success: boolean; data: any }>('/products', body),
+  update: (productId: string, body: any) =>
+    api.put<{ success: boolean; data: any }>(`/products/${productId}`, body),
+  remove: (productId: string) =>
+    api.delete<{ success: boolean }>(`/products/${productId}`),
+  updateInventory: (productId: string, inventory: number, lowStockThreshold?: number) =>
+    api.patch<{ success: boolean; data: any }>(`/products/${productId}/inventory`, { inventory, lowStockThreshold }),
+};
+
+// ─── Categories ──────────────────────────────────────────────────────────────
+export const categoryApi = {
+  list: () => api.get<{ success: boolean; data: any[] }>('/categories'),
+  get: (slug: string) => api.get<{ success: boolean; data: any }>(`/categories/${slug}`),
+};
+
+// ─── Cart ────────────────────────────────────────────────────────────────────
+export const cartApi = {
+  get: () => api.get<{ success: boolean; data: any }>('/cart'),
+  add: (body: { productId: string; variantId?: string; quantity: number }) => api.post('/cart/items', body),
+  update: (body: { productId: string; variantId?: string; quantity: number }) => api.put('/cart/items', body),
+  clear: () => api.delete('/cart'),
+  applyCoupon: (code: string) => api.post('/cart/coupon', { code }),
+};
+
+// ─── Orders ──────────────────────────────────────────────────────────────────
+export const orderApi = {
+  create: (body: any) => api.post<{ success: boolean; data: any }>('/orders', body),
+  list: () => api.get<{ success: boolean; data: any[] }>('/orders'),
+  get: (orderNumber: string) => api.get<{ success: boolean; data: any }>(`/orders/${orderNumber}`),
+};
+
+// ─── User ────────────────────────────────────────────────────────────────────
+export const userApi = {
+  getProfile: () => api.get<{ success: boolean; data: UserData }>('/users/profile'),
+  updateProfile: (body: Partial<UserData>) => api.put('/users/profile', body),
+  getWishlist: () => api.get<{ success: boolean; data: any[] }>('/users/wishlist'),
+  toggleWishlist: (productId: string) => api.post('/users/wishlist/toggle', { productId }),
+};
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+export const adminApi = {
+  stats: () => api.get<{ success: boolean; data: any }>('/users/admin/stats'),
+  users: () => api.get<{ success: boolean; data: any[] }>('/users/admin/all'),
+};
+
+export interface UserData {
+  _id: string;
+  id?: string;
+  email: string;
+  fullName: string;
+  role: 'customer' | 'admin';
+  avatarUrl?: string;
+  phone?: string;
+  shippingAddress?: any;
+  wishlist?: string[];
+}

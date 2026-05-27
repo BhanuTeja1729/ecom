@@ -1,0 +1,146 @@
+[
+  {
+    "id": "a158712d-dda3-4932-bdff-4804d644cee7",
+    "product_id": "b7e9fc2f-593b-4049-9dd9-46882de2e4da",
+    "url": "https://images.pexels.com/photos/1649771/pexels-photo-1649771.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "ProAir headphones side view",
+    "sort_order": 1,
+    "is_primary": false,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "9c64bffe-0e1b-4031-a830-25fbff1683fd",
+    "product_id": "b7e9fc2f-593b-4049-9dd9-46882de2e4da",
+    "url": "https://images.pexels.com/photos/3587478/pexels-photo-3587478.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "ProAir headphones front view",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "95c7a98f-5c6e-40b5-a9a8-768b9cdbd44f",
+    "product_id": "df092161-4f2b-4869-8639-d976f63cc428",
+    "url": "https://images.pexels.com/photos/437037/pexels-photo-437037.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "UltraWatch Pro on wrist",
+    "sort_order": 1,
+    "is_primary": false,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "d8072d2f-1dfb-416b-8766-db77233aae71",
+    "product_id": "df092161-4f2b-4869-8639-d976f63cc428",
+    "url": "https://images.pexels.com/photos/393047/pexels-photo-393047.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "UltraWatch Pro face",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "a8e8b1c4-a482-42e6-8255-f72d7ad5f19b",
+    "product_id": "6059c75b-5670-43b1-8afe-0e18cb285af6",
+    "url": "https://images.pexels.com/photos/18105/pexels-photo.jpg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "LightBook Air 15 open",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "3dfbdde4-6d7c-4ddb-895b-284b59d7d269",
+    "product_id": "561c10cd-d018-4eaa-aeac-d5c708d9df3d",
+    "url": "https://images.pexels.com/photos/8532616/pexels-photo-8532616.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Merino tee front",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "8d43a0a8-56f6-4335-959a-3db19a048e8b",
+    "product_id": "39bd8a1d-d742-472f-b764-be1f8cb8c146",
+    "url": "https://images.pexels.com/photos/1598505/pexels-photo-1598505.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Runner shoe detail",
+    "sort_order": 1,
+    "is_primary": false,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "e70fff19-3d7f-48ec-ae6d-387d6740d376",
+    "product_id": "39bd8a1d-d742-472f-b764-be1f8cb8c146",
+    "url": "https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Apex Runner Pro",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "03747d06-6c20-4956-b765-63baa6d72933",
+    "product_id": "1c613c2a-ec91-45c1-946c-d7b28ced15a8",
+    "url": "https://images.pexels.com/photos/3762879/pexels-photo-3762879.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Vita Glow Serum bottle",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "d044270e-e4a1-42ee-8987-04e59c11e6c4",
+    "product_id": "3d40a248-f079-43a7-aa81-fdb583380cb0",
+    "url": "https://images.pexels.com/photos/2312369/pexels-photo-2312369.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Marble desk set",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "c04ec25b-5c14-408e-8762-74c3915eb544",
+    "product_id": "96685ffa-85b3-44af-b479-53d3d03f65c2",
+    "url": "https://images.pexels.com/photos/2905238/pexels-photo-2905238.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Backpack detail",
+    "sort_order": 1,
+    "is_primary": false,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "6bbda319-bce8-41a4-b294-7a3eda529223",
+    "product_id": "96685ffa-85b3-44af-b479-53d3d03f65c2",
+    "url": "https://images.pexels.com/photos/1152077/pexels-photo-1152077.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Nomad Backpack",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "8e12e05c-ee91-4da5-ab85-ed16d5bb17be",
+    "product_id": "a07ea2e5-5ffa-4bf3-a290-53f43f54a1e8",
+    "url": "https://images.pexels.com/photos/4162579/pexels-photo-4162579.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Resistance bands set",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "ecb800fd-18ec-4029-a0d5-98cd1363f150",
+    "product_id": "d8f9c60d-28d4-4ae8-8d4e-844c3eacb2c5",
+    "url": "https://images.pexels.com/photos/6267516/pexels-photo-6267516.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "CloudSleep Pillow",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "e21e3c30-c77e-4572-81a1-99f2ef5a7ac3",
+    "product_id": "943dc1ab-e694-4c8d-8872-cd76349f015f",
+    "url": "https://images.pexels.com/photos/312418/pexels-photo-312418.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Coffee scale",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  },
+  {
+    "id": "a4468aee-2fb3-4a30-9877-cc6445f68d46",
+    "product_id": "7baf5db5-6be0-479d-8de5-17eb03d2b33e",
+    "url": "https://images.pexels.com/photos/164501/pexels-photo-164501.jpeg?auto=compress&cs=tinysrgb&w=800",
+    "alt_text": "Titanium card holder",
+    "sort_order": 0,
+    "is_primary": true,
+    "created_at": "2026-05-10 13:13:01.034802+00"
+  }
+]

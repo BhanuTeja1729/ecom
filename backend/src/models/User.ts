@@ -1,0 +1,77 @@
+import mongoose, { Schema, Document } from 'mongoose';
+import bcrypt from 'bcryptjs';
+
+export interface IAddress {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+}
+
+export interface IUser extends Document {
+  email: string;
+  password?: string;
+  fullName: string;
+  avatarUrl?: string;
+  phone?: string;
+  role: 'customer' | 'admin';
+  googleId?: string;
+  isVerified: boolean;
+  isActive: boolean;
+  shippingAddress?: IAddress;
+  addresses: IAddress[];
+  wishlist: mongoose.Types.ObjectId[];
+  refreshTokens: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+const AddressSchema = new Schema<IAddress>({
+  fullName: String,
+  email: String,
+  phone: String,
+  addressLine1: String,
+  addressLine2: String,
+  city: String,
+  state: String,
+  postalCode: String,
+  country: String,
+}, { _id: false });
+
+const UserSchema = new Schema<IUser>({
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password: { type: String, select: false },
+  fullName: { type: String, required: true, trim: true },
+  avatarUrl: String,
+  phone: String,
+  role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  googleId: { type: String, sparse: true },
+  isVerified: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
+  shippingAddress: AddressSchema,
+  addresses: [AddressSchema],
+  wishlist: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
+  refreshTokens: [String],
+}, { timestamps: true });
+
+UserSchema.pre('save', async function (next) {
+  if (!this.isModified('password') || !this.password) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
+  if (!this.password) return false;
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
+UserSchema.index({ email: 1 });
+UserSchema.index({ googleId: 1 });
+
+export const User = mongoose.model<IUser>('User', UserSchema);
