@@ -94,7 +94,6 @@ const ProductSchema = new Schema<IProduct>({
   soldCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
-ProductSchema.index({ slug: 1 });
 ProductSchema.index({ category: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ isFeatured: 1 });

@@ -35,6 +35,8 @@ export interface IOrder extends Document {
   billingAddress?: IAddress;
   paymentMethod?: string;
   paymentIntentId?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
   notes?: string;
   trackingNumber?: string;
   statusHistory: IStatusEvent[];
@@ -78,6 +80,8 @@ const OrderSchema = new Schema<IOrder>({
   billingAddress: AddressSchema,
   paymentMethod: String,
   paymentIntentId: String,
+  razorpayOrderId: String,
+  razorpayPaymentId: String,
   notes: String,
   trackingNumber: String,
   statusHistory: [{ status: String, message: String, timestamp: { type: Date, default: Date.now } }],
@@ -86,7 +90,6 @@ const OrderSchema = new Schema<IOrder>({
 }, { timestamps: true });
 
 OrderSchema.index({ user: 1 });
-OrderSchema.index({ orderNumber: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
 

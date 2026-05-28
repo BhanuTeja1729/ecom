@@ -40,11 +40,11 @@ export function Legal({ page }: LegalProps) {
               },
               {
                 title: '6. Your Rights',
-                body: 'Depending on your location, you may have rights including: access to your personal data; correction of inaccurate data; deletion of your data; portability of your data; and opting out of marketing communications. Contact us at privacy@luxestore.com to exercise these rights.',
+                body: 'Depending on your location, you may have rights including: access to your personal data; correction of inaccurate data; deletion of your data; portability of your data; and opting out of marketing communications. Contact us at privacy@blipzo.com to exercise these rights.',
               },
               {
                 title: '7. Contact Us',
-                body: 'If you have questions about this Privacy Policy, please contact us at: Luxe Store, 123 Commerce St, New York, NY 10001. Email: privacy@luxestore.com. Phone: +1 (800) 555-1234.',
+                body: 'If you have questions about this Privacy Policy, please contact us at: BLIPZO Innovations Pvt. Ltd., Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005. Email: privacy@blipzo.com.',
               },
             ].map(({ title, body }) => (
               <div key={title}>
@@ -58,7 +58,7 @@ export function Legal({ page }: LegalProps) {
             {[
               {
                 title: '1. Acceptance of Terms',
-                body: 'By accessing or using the Luxe Store website and services, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our services. We reserve the right to update these terms at any time.',
+                body: 'By accessing or using the BLIPZO website and services, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our services. We reserve the right to update these terms at any time.',
               },
               {
                 title: '2. Account Responsibility',
@@ -66,7 +66,7 @@ export function Legal({ page }: LegalProps) {
               },
               {
                 title: '3. Products and Pricing',
-                body: 'We reserve the right to modify product descriptions, pricing, and availability without notice. In the event of a pricing error, we reserve the right to cancel orders at the incorrect price and will notify you promptly. All prices are in USD unless otherwise stated.',
+                body: 'We reserve the right to modify product descriptions, pricing, and availability without notice. In the event of a pricing error, we reserve the right to cancel orders at the incorrect price and will notify you promptly. All prices are in INR unless otherwise stated.',
               },
               {
                 title: '4. Orders and Payment',
@@ -74,19 +74,19 @@ export function Legal({ page }: LegalProps) {
               },
               {
                 title: '5. Intellectual Property',
-                body: 'All content on the Luxe Store website, including text, graphics, logos, images, and software, is the property of Luxe Store or its content suppliers and is protected by intellectual property laws. You may not reproduce, distribute, or create derivative works without our express written permission.',
+                body: 'All content on the BLIPZO website, including text, graphics, logos, images, and software, is the property of BLIPZO Innovations Pvt. Ltd. or its content suppliers and is protected by intellectual property laws. You may not reproduce, distribute, or create derivative works without our express written permission.',
               },
               {
                 title: '6. Limitation of Liability',
-                body: 'To the maximum extent permitted by law, Luxe Store shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use our services. Our total liability shall not exceed the amount paid by you in the past 12 months.',
+                body: 'To the maximum extent permitted by law, BLIPZO Innovations Pvt. Ltd. shall not be liable for any indirect, incidental, special, consequential, or punitive damages resulting from your use of or inability to use our services. Our total liability shall not exceed the amount paid by you in the past 12 months.',
               },
               {
                 title: '7. Governing Law',
-                body: 'These terms shall be governed by the laws of the State of New York, without regard to its conflict of law provisions. Any disputes shall be resolved in the courts of New York County, New York.',
+                body: 'These terms shall be governed by the laws of India, specifically under the jurisdiction of courts in Jammu, Jammu & Kashmir. Any disputes shall be resolved in the courts of Jammu.',
               },
               {
                 title: '8. Contact Information',
-                body: 'For questions about these Terms, contact us at: legal@luxestore.com or Luxe Store, 123 Commerce St, New York, NY 10001.',
+                body: 'For questions about these Terms, contact us at: legal@blipzo.com or BLIPZO Innovations Pvt. Ltd., Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005.',
               },
             ].map(({ title, body }) => (
               <div key={title}>

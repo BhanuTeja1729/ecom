@@ -6,42 +6,83 @@ import { ToastProvider } from './contexts/ToastContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/layout/CartDrawer';
-import { Home } from './pages/Home';
-import { Shop } from './pages/Shop';
-import { ProductDetail } from './pages/ProductDetail';
-import { Cart } from './pages/Cart';
-import { Checkout } from './pages/Checkout';
-import { Auth } from './pages/Auth';
-import { Dashboard } from './pages/Dashboard';
-import { OrderTracking } from './pages/OrderTracking';
-import { Admin } from './pages/Admin';
-import { About } from './pages/About';
-import { Contact } from './pages/Contact';
-import { FAQ } from './pages/FAQ';
-import { Legal } from './pages/Legal';
+import { useAuth } from './contexts/AuthContext';
+import { useEffect, lazy, Suspense } from 'react';
+
+// Lazy load page components
+const Landing = lazy(() => import('./pages/Landing').then(m => ({ default: m.Landing })));
+const Shop = lazy(() => import('./pages/Shop').then(m => ({ default: m.Shop })));
+const ProductDetail = lazy(() => import('./pages/ProductDetail').then(m => ({ default: m.ProductDetail })));
+const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
+const Checkout = lazy(() => import('./pages/Checkout').then(m => ({ default: m.Checkout })));
+const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
+const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
+const Contact = lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
+const FAQ = lazy(() => import('./pages/FAQ').then(m => ({ default: m.FAQ })));
+const Legal = lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
+
+// Loading skeleton fallback for Suspense page loading
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-12 h-12 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin" />
+    </div>
+  );
+}
+
+// Routes that skip the shared Header/Footer (have their own layout)
+const NO_LAYOUT_PATHS = ['/auth', '/', '/about', '/contact'];
+
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { navigate } = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return user ? <>{children}</> : null;
+}
 
 function AppRouter() {
   const { path, params } = useRouter();
 
-  const noLayoutPaths = ['/auth'];
-  const showLayout = !noLayoutPaths.includes(path);
+  const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth');
 
   function renderPage() {
-    if (path === '/') return <Home />;
-    if (path === '/shop') return <Shop />;
-    if (path.startsWith('/category/') && params.slug) return <Shop categorySlug={params.slug} />;
-    if (path.startsWith('/product/') && params.slug) return <ProductDetail slug={params.slug} />;
-    if (path === '/cart') return <Cart />;
-    if (path === '/checkout') return <Checkout />;
+    // Public routes
+    if (path === '/') return <Landing />;
     if (path === '/auth') return <Auth />;
-    if (path === '/dashboard') return <Dashboard />;
-    if (path === '/order-tracking') return <OrderTracking />;
-    if (path === '/admin') return <Admin />;
     if (path === '/about') return <About />;
     if (path === '/contact') return <Contact />;
     if (path === '/faq') return <FAQ />;
     if (path === '/privacy') return <Legal page="privacy" />;
     if (path === '/terms') return <Legal page="terms" />;
+    if (path === '/admin') return <Admin />;
+
+    // Protected routes — shop, cart, checkout, dashboard, etc.
+    if (path === '/shop') return <ProtectedRoute><Shop /></ProtectedRoute>;
+    if (path.startsWith('/category/') && params.slug) return <ProtectedRoute><Shop categorySlug={params.slug} /></ProtectedRoute>;
+    if (path.startsWith('/product/') && params.slug) return <ProtectedRoute><ProductDetail slug={params.slug} /></ProtectedRoute>;
+    if (path === '/cart') return <ProtectedRoute><Cart /></ProtectedRoute>;
+    if (path === '/checkout') return <ProtectedRoute><Checkout /></ProtectedRoute>;
+    if (path === '/dashboard') return <ProtectedRoute><Dashboard /></ProtectedRoute>;
+    if (path === '/order-tracking') return <ProtectedRoute><OrderTracking /></ProtectedRoute>;
+
     return <NotFound />;
   }
 
@@ -49,7 +90,9 @@ function AppRouter() {
     <>
       {showLayout && <Header />}
       <CartDrawer />
-      {renderPage()}
+      <Suspense fallback={<PageLoader />}>
+        {renderPage()}
+      </Suspense>
       {showLayout && <Footer />}
     </>
   );

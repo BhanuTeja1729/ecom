@@ -25,6 +25,8 @@ const checkoutSchema = z.object({
   paymentMethod: z.string(),
   couponCode: z.string().optional(),
   notes: z.string().optional(),
+  razorpayPaymentId: z.string().optional(),
+  razorpayOrderId: z.string().optional(),
 });
 
 export async function createOrder(req: Request & { user?: any }, res: Response, next: NextFunction) {
@@ -91,8 +93,11 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
       paymentMethod: data.paymentMethod,
+      paymentStatus: data.razorpayPaymentId ? 'paid' : 'pending',
+      razorpayPaymentId: data.razorpayPaymentId,
+      razorpayOrderId: data.razorpayOrderId,
       notes: data.notes,
-      statusHistory: [{ status: 'pending', message: 'Order placed', timestamp: new Date() }],
+      statusHistory: [{ status: data.razorpayPaymentId ? 'confirmed' : 'pending', message: data.razorpayPaymentId ? 'Payment received via Razorpay' : 'Order placed', timestamp: new Date() }],
     });
 
     // Reduce inventory

@@ -35,23 +35,23 @@ export function Footer() {
               <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
                 <Zap className="w-4 h-4 text-white fill-white" />
               </div>
-              <span className="text-xl font-black tracking-tight text-white">LUXE</span>
+              <span className="text-xl font-black tracking-tight text-white">BLIPZO</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed mb-6 max-w-xs">
-              Premium products curated for the discerning customer. Quality, style, and innovation delivered to your door.
+              BLIPZO Innovations Pvt. Ltd. — Premium products curated for the discerning customer. Quality, style, and innovation delivered to your door.
             </p>
             <div className="flex flex-col gap-3">
-              <a href="mailto:hello@luxestore.com" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
+              <a href="mailto:2804blipzoinnovationptv@gmail.com" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
                 <Mail className="w-4 h-4" />
-                hello@luxestore.com
+                2804blipzoinnovationptv@gmail.com
               </a>
-              <a href="tel:+18005551234" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
+              <a href="tel:+91191XXXXXXX" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
                 <Phone className="w-4 h-4" />
-                +1 (800) 555-1234
+                +91-191-XXXXXXX
               </a>
               <span className="flex items-center gap-2.5 text-sm text-gray-400">
                 <MapPin className="w-4 h-4 shrink-0" />
-                123 Commerce St, New York, NY 10001
+                Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005
               </span>
             </div>
           </div>
@@ -62,7 +62,7 @@ export function Footer() {
               <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-5">{title}</h4>
               <ul className="space-y-3">
                 {links.map(link => (
-                  <li key={link.href}>
+                  <li key={`${link.href}-${link.label}`}>
                     <Link
                       to={link.href}
                       className="text-sm text-gray-400 hover:text-amber-400 transition-colors"
@@ -108,7 +108,7 @@ export function Footer() {
       <div className="border-t border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
-            &copy; {new Date().getFullYear()} Luxe Store. All rights reserved.
+            &copy; {new Date().getFullYear()} BLIPZO Innovations Pvt. Ltd. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>

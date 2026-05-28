@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 import { Product } from '../models/Product';
+import { Category } from '../models/Category';
 import { createError } from '../middleware/error';
 import { slugify } from '../utils/helpers';
 
@@ -42,12 +44,44 @@ const productSchema = z.object({
 export async function getProducts(req: Request, res: Response, next: NextFunction) {
   try {
     const {
-      page = '1', limit = '20', category, search, sort = 'createdAt',
+      page = '1', limit = '20', category, categorySlug, search, sort = 'createdAt',
       order = 'desc', minPrice, maxPrice, featured, tags,
     } = req.query as Record<string, string>;
 
     const query: any = { isActive: true };
-    if (category) query.category = category;
+
+    // Resolve category by slug or ObjectId (including child categories)
+    if (categorySlug) {
+      const cat = await Category.findOne({ slug: categorySlug, isActive: true }).lean();
+      if (cat) {
+        // Also include child categories
+        const childCats = await Category.find({ parent: cat._id, isActive: true }).select('_id').lean();
+        const catIds = [cat._id, ...childCats.map(c => c._id)];
+        query.category = { $in: catIds };
+      } else {
+        // No matching category → return empty results
+        return res.json({ success: true, data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+      }
+    } else if (category) {
+      // Could be an ObjectId or a slug
+      if (mongoose.isValidObjectId(category)) {
+        // Also include child categories
+        const childCats = await Category.find({ parent: category, isActive: true }).select('_id').lean();
+        const catIds = [new mongoose.Types.ObjectId(category), ...childCats.map(c => c._id)];
+        query.category = { $in: catIds };
+      } else {
+        // Treat as slug
+        const cat = await Category.findOne({ slug: category, isActive: true }).lean();
+        if (cat) {
+          const childCats = await Category.find({ parent: cat._id, isActive: true }).select('_id').lean();
+          const catIds = [cat._id, ...childCats.map(c => c._id)];
+          query.category = { $in: catIds };
+        } else {
+          return res.json({ success: true, data: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
+        }
+      }
+    }
+
     if (featured === 'true') query.isFeatured = true;
     if (tags) query.tags = { $in: tags.split(',') };
     if (minPrice || maxPrice) {
@@ -56,14 +90,19 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
       if (maxPrice) query.price.$lte = parseFloat(maxPrice);
     }
     if (search) {
-      query.$text = { $search: search };
+      // Support partial name matching in addition to full-text search
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { shortDescription: { $regex: search, $options: 'i' } },
+        { tags: { $in: [new RegExp(search, 'i')] } },
+      ];
     }
 
     const sortDir = order === 'asc' ? 1 : -1;
     const sortObj: any = { [sort]: sortDir };
 
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 100);
+    const limitNum = Math.min(parseInt(limit), 200);
     const skip = (pageNum - 1) * limitNum;
 
     const [products, total] = await Promise.all([

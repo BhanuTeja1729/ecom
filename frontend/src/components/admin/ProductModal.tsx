@@ -111,18 +111,67 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
           {/* Basic */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-3">
               <label className={label}>Product Name *</label>
               <input className={input} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Premium Wireless Headphones" />
             </div>
             <div>
-              <label className={label}>Price (₹) *</label>
-              <input type="number" min={0} className={input} value={form.price} onChange={e => set('price', e.target.value)} placeholder="29999" />
+              <label className={label}>MRP / Main Price (₹) *</label>
+              <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => {
+                const mrp = e.target.value;
+                set('comparePrice', mrp);
+                // Auto-calculate selling price from MRP and discount
+                const disc = parseFloat(form.discountPercent);
+                const mrpNum = parseFloat(mrp);
+                if (mrpNum > 0 && disc > 0 && disc < 100) {
+                  set('price', String(Math.round(mrpNum * (1 - disc / 100))));
+                } else if (mrpNum > 0) {
+                  set('price', mrp); // No discount → selling = MRP
+                }
+              }} placeholder="320" />
             </div>
             <div>
-              <label className={label}>Compare Price (₹)</label>
-              <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => set('comparePrice', e.target.value)} placeholder="39999" />
+              <label className={label}>Discount %</label>
+              <div className="relative">
+                <input type="number" min={0} max={99} step={1} className={input + ' pr-8'} value={form.discountPercent ?? (() => {
+                  // Auto-calculate from existing price/comparePrice
+                  const p = parseFloat(form.price);
+                  const cp = parseFloat(form.comparePrice);
+                  if (cp > 0 && p > 0 && cp > p) return String(Math.round(((cp - p) / cp) * 100));
+                  return '';
+                })()} onChange={e => {
+                  const disc = e.target.value;
+                  set('discountPercent', disc);
+                  const mrp = parseFloat(form.comparePrice);
+                  if (mrp > 0 && parseFloat(disc) > 0 && parseFloat(disc) < 100) {
+                    set('price', String(Math.round(mrp * (1 - parseFloat(disc) / 100))));
+                  } else if (mrp > 0) {
+                    set('price', String(Math.round(mrp))); // 0% discount → selling = MRP
+                  }
+                }} placeholder="10" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">%</span>
+              </div>
+            </div>
+            <div>
+              <label className={label}>Selling Price (₹)</label>
+              <input type="number" min={0} className={input + ' bg-gray-50 font-bold text-emerald-700'} value={form.price} onChange={e => {
+                const sp = e.target.value;
+                set('price', sp);
+                // Auto-update discount % from MRP and new selling price
+                const mrp = parseFloat(form.comparePrice);
+                const spNum = parseFloat(sp);
+                if (mrp > 0 && spNum > 0 && mrp > spNum) {
+                  set('discountPercent', String(Math.round(((mrp - spNum) / mrp) * 100)));
+                } else {
+                  set('discountPercent', '');
+                }
+              }} placeholder="289" />
+              {parseFloat(form.comparePrice) > 0 && parseFloat(form.price) > 0 && parseFloat(form.comparePrice) > parseFloat(form.price) && (
+                <p className="text-[11px] text-amber-600 font-semibold mt-1">
+                  You save ₹{(parseFloat(form.comparePrice) - parseFloat(form.price)).toLocaleString('en-IN')} ({Math.round(((parseFloat(form.comparePrice) - parseFloat(form.price)) / parseFloat(form.comparePrice)) * 100)}% off)
+                </p>
+              )}
             </div>
             <div>
               <label className={label}>SKU</label>

@@ -18,6 +18,7 @@ import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
@@ -73,6 +74,7 @@ app.use(`${BASE}/categories`, categoryRoutes);
 app.use(`${BASE}/cart`, cartRoutes);
 app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
+app.use(`${BASE}/payment`, paymentRoutes);
 
 // ─── 404 & Error Handler ────────────────────────────────────────────────────
 app.use(notFound);

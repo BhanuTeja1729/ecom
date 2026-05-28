@@ -13,6 +13,8 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:5173'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  AUTH0_DOMAIN: z.string().optional(),
+
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   RAZORPAY_KEY_ID: z.string().optional(),

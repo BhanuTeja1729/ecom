@@ -8,8 +8,6 @@ import { categoryApi, productApi } from '../../lib/api';
 
 const NAV_LINKS = [
   { label: 'Shop', href: '/shop' },
-  { label: 'About', href: '/about' },
-  { label: 'Contact', href: '/contact' },
 ];
 
 export function Header() {
@@ -69,7 +67,7 @@ export function Header() {
             <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
               <Zap className="w-4 h-4 text-white fill-white" />
             </div>
-            <span className={`text-xl font-black tracking-tight ${textColor}`}>LUXE</span>
+            <span className={`text-xl font-black tracking-tight ${textColor}`}>BLIPZO</span>
           </Link>
 
           {/* Desktop Nav */}
@@ -224,7 +222,7 @@ export function Header() {
                       Order Tracking
                     </button>
                     <hr className="my-1 border-gray-100" />
-                    <button onClick={signOut} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors">
+                    <button onClick={() => signOut()} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                       Sign Out
                     </button>
                   </div>
@@ -270,7 +268,7 @@ export function Header() {
               <>
                 <button onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">Dashboard</button>
                 {isAdmin && <button onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl">Admin Panel</button>}
-                <button onClick={signOut} className="w-full text-left px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl">Sign Out</button>
+                <button onClick={() => { setMobileOpen(false); signOut(); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl">Sign Out</button>
               </>
             ) : (
               <button onClick={() => { navigate('/auth'); setMobileOpen(false); }} className="w-full px-4 py-3 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors">
