@@ -166,7 +166,6 @@ const CAT_COLORS = [
 
 /* ─── main Shop page ─────────────────────────────────────────────────────── */
 export function Shop({ categorySlug }: { categorySlug?: string }) {
-  const { navigate } = useRouter();
   const { addItem } = useCart();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
