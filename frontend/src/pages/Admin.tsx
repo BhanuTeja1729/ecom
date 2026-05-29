@@ -306,7 +306,7 @@ export function Admin() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        {['Product', 'SKU', 'Price', 'Stock', 'Threshold', 'Status', 'Actions'].map(h => (
+                        {['Product', 'SKU', 'MRP', 'Discount', 'Selling Price', 'Stock', 'Threshold', 'Status', 'Actions'].map(h => (
                           <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -315,7 +315,7 @@ export function Admin() {
                       {dataLoading
                         ? [1,2,3,4].map(i => (
                           <tr key={i}>
-                            {[1,2,3,4,5,6,7].map(j => (
+                            {[1,2,3,4,5,6,7,8,9].map(j => (
                               <td key={j} className="px-4 py-4">
                                 <div className="h-4 bg-gray-100 rounded animate-pulse" />
                               </td>
@@ -327,6 +327,7 @@ export function Admin() {
                           const isLow = p.inventory >= 0 && p.inventory <= (p.lowStockThreshold ?? 5);
                           const isOOS = p.inventory === 0;
                           const ed = editing[p._id];
+                          const hasDiscount = p.comparePrice && p.comparePrice > p.price;
 
                           return (
                             <tr key={p._id} className={`hover:bg-gray-50 transition-colors ${isOOS ? 'bg-red-50/40' : isLow ? 'bg-amber-50/40' : ''}`}>
@@ -348,8 +349,28 @@ export function Admin() {
                               {/* SKU */}
                               <td className="px-4 py-3 text-gray-400 text-xs font-mono">{p.sku || '—'}</td>
 
-                              {/* Price */}
-                              <td className="px-4 py-3 font-bold text-gray-900 text-xs">{fmt(p.price)}</td>
+                              {/* MRP */}
+                              <td className="px-4 py-3 text-xs">
+                                {hasDiscount ? (
+                                  <span className="text-gray-400 line-through">{fmt(p.comparePrice)}</span>
+                                ) : (
+                                  <span className="font-bold text-gray-900">{fmt(p.price)}</span>
+                                )}
+                              </td>
+
+                              {/* Discount */}
+                              <td className="px-4 py-3">
+                                {hasDiscount ? (
+                                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-amber-50 text-amber-700 text-[11px] font-bold rounded-full border border-amber-100">
+                                    {Math.round(((p.comparePrice - p.price) / p.comparePrice) * 100)}% off
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">—</span>
+                                )}
+                              </td>
+
+                              {/* Selling Price */}
+                              <td className="px-4 py-3 font-black text-emerald-600 text-xs">{fmt(p.price)}</td>
 
                               {/* Stock — editable */}
                               <td className="px-4 py-3">

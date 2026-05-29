@@ -1,12 +1,18 @@
 import { useState } from 'react';
-import { Check, ChevronRight, Shield, Lock, CreditCard, Truck } from 'lucide-react';
+import { Check, ChevronRight, Shield, Lock, Truck, Zap } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { orderApi } from '../lib/api';
+import { orderApi, paymentApi } from '../lib/api';
 
-type Step = 'shipping' | 'payment' | 'review';
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
+type Step = 'shipping' | 'review';
 
 interface ShippingForm {
   fullName: string;
@@ -32,11 +38,6 @@ export function Checkout() {
 
   const [step, setStep] = useState<Step>('shipping');
   const [shipping, setShipping] = useState<ShippingForm>(EMPTY_SHIPPING);
-  const [paymentMethod] = useState('card');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
-  const [cardName, setCardName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
 
@@ -47,44 +48,93 @@ export function Checkout() {
 
   function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStep('payment');
-  }
-
-  function handlePaymentSubmit(e: React.FormEvent) {
-    e.preventDefault();
     setStep('review');
   }
 
-  async function handlePlaceOrder() {
+  async function handlePayWithRazorpay() {
     if (!user) { navigate('/auth'); return; }
     setSubmitting(true);
+
     try {
-      const res = await orderApi.create({
-        shippingAddress: {
-          fullName: shipping.fullName,
+      // Step 1: Create Razorpay order on backend (amount in paise)
+      const amountInPaise = Math.round(orderTotal * 100);
+      const { data: rzpOrder } = await paymentApi.createOrder(amountInPaise);
+
+      // Step 2: Open Razorpay checkout popup
+      const options = {
+        key: rzpOrder.keyId,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        name: 'BLIPZO Store',
+        description: `Order — ${items.length} item${items.length > 1 ? 's' : ''}`,
+        order_id: rzpOrder.orderId,
+        prefill: {
+          name: shipping.fullName,
           email: shipping.email,
-          phone: shipping.phone,
-          addressLine1: shipping.address,
-          city: shipping.city,
-          state: shipping.state,
-          postalCode: shipping.zip,
-          country: shipping.country,
+          contact: shipping.phone,
         },
-        paymentMethod: 'card',
-        couponCode: coupon?.code ?? '',
-        items: items.map(item => ({
-          productId: item.product._id || item.product.id,
-          variantId: item.variant?._id || item.variant?.id,
-          quantity: item.quantity,
-        })),
+        theme: {
+          color: '#f59e0b', // amber-500
+        },
+        handler: async function (response: any) {
+          try {
+            // Step 3: Verify payment on backend
+            await paymentApi.verify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            // Step 4: Create order with verified payment info
+            const orderRes = await orderApi.create({
+              shippingAddress: {
+                fullName: shipping.fullName,
+                email: shipping.email,
+                phone: shipping.phone,
+                addressLine1: shipping.address,
+                city: shipping.city,
+                state: shipping.state,
+                postalCode: shipping.zip,
+                country: shipping.country,
+              },
+              paymentMethod: 'razorpay',
+              couponCode: coupon?.code ?? '',
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpayOrderId: response.razorpay_order_id,
+              items: items.map(item => ({
+                productId: item.product._id || item.product.id,
+                variantId: item.variant?._id || item.variant?.id,
+                quantity: item.quantity,
+              })),
+            });
+
+            setOrderNumber(orderRes.data.orderNumber);
+            clearCart();
+            toast('Payment successful! Order placed.', 'success');
+          } catch (err: any) {
+            toast(err.message || 'Order creation failed after payment.', 'error');
+          } finally {
+            setSubmitting(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setSubmitting(false);
+            toast('Payment was cancelled.', 'error');
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response: any) {
+        setSubmitting(false);
+        toast(`Payment failed: ${response.error.description}`, 'error');
       });
-      setOrderNumber(res.data.orderNumber);
-      clearCart();
-      setStep('review');
-      toast('Order placed successfully!', 'success');
+      rzp.open();
     } catch (err: any) {
-      toast(err.message || 'Failed to place order. Please try again.', 'error');
-    } finally { setSubmitting(false); }
+      setSubmitting(false);
+      toast(err.message || 'Failed to initiate payment.', 'error');
+    }
   }
 
   if (items.length === 0 && !orderNumber) {
@@ -104,14 +154,17 @@ export function Checkout() {
     return (
       <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
         <div className="max-w-lg w-full mx-4 text-center">
-          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
             <Check className="w-10 h-10 text-emerald-500" />
           </div>
           <h1 className="text-3xl font-black text-gray-900 mb-3">Order Confirmed!</h1>
-          <p className="text-gray-500 mb-2">Thank you for your purchase.</p>
+          <p className="text-gray-500 mb-2">Thank you for your purchase. Payment has been received.</p>
           <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
             <p className="text-sm text-gray-500 mb-1">Order Number</p>
             <p className="text-2xl font-black text-amber-600">{orderNumber}</p>
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-100">
+              <Shield className="w-3 h-3" /> Payment Verified
+            </div>
             <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{shipping.email}</strong></p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -129,8 +182,7 @@ export function Checkout() {
 
   const steps = [
     { id: 'shipping', label: 'Shipping' },
-    { id: 'payment', label: 'Payment' },
-    { id: 'review', label: 'Review' },
+    { id: 'review', label: 'Review & Pay' },
   ];
   const stepIndex = steps.findIndex(s => s.id === step);
 
@@ -166,12 +218,12 @@ export function Checkout() {
                   {[
                     { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false },
                     { key: 'email', label: 'Email Address', placeholder: 'john@example.com', full: false },
-                    { key: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', full: false },
+                    { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false },
                     { key: 'address', label: 'Street Address', placeholder: '123 Main St, Apt 4B', full: true },
-                    { key: 'city', label: 'City', placeholder: 'New York', full: false },
-                    { key: 'state', label: 'State', placeholder: 'NY', full: false },
-                    { key: 'zip', label: 'ZIP Code', placeholder: '10001', full: false },
-                    { key: 'country', label: 'Country', placeholder: 'US', full: false },
+                    { key: 'city', label: 'City', placeholder: 'Mumbai', full: false },
+                    { key: 'state', label: 'State', placeholder: 'Maharashtra', full: false },
+                    { key: 'zip', label: 'PIN Code', placeholder: '400001', full: false },
+                    { key: 'country', label: 'Country', placeholder: 'India', full: false },
                   ].map(field => (
                     <div key={field.key} className={field.full ? 'sm:col-span-2' : ''}>
                       <label className="text-sm font-semibold text-gray-700 mb-1.5 block">{field.label}</label>
@@ -187,48 +239,8 @@ export function Checkout() {
                   ))}
                 </div>
                 <button type="submit" className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
-                  Continue to Payment <ChevronRight className="w-4 h-4" />
+                  Continue to Review <ChevronRight className="w-4 h-4" />
                 </button>
-              </form>
-            )}
-
-            {step === 'payment' && (
-              <form onSubmit={handlePaymentSubmit} className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
-                  <CreditCard className="w-5 h-5 text-amber-500" /> Payment Details
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Cardholder Name</label>
-                    <input type="text" value={cardName} onChange={e => setCardName(e.target.value)} placeholder="John Doe" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Card Number</label>
-                    <input type="text" value={cardNumber} onChange={e => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))} placeholder="1234 5678 9012 3456" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Expiry Date</label>
-                      <input type="text" value={cardExpiry} onChange={e => setCardExpiry(e.target.value)} placeholder="MM/YY" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
-                    </div>
-                    <div>
-                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">CVC</label>
-                      <input type="text" value={cardCvc} onChange={e => setCardCvc(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="123" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-gray-400" />
-                  <p className="text-xs text-gray-500">Your payment information is encrypted and secure. We never store your card details.</p>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button type="button" onClick={() => setStep('shipping')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
-                    Back
-                  </button>
-                  <button type="submit" className="flex-1 py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
-                    Review Order <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
               </form>
             )}
 
@@ -237,14 +249,17 @@ export function Checkout() {
                 <h2 className="text-xl font-black text-gray-900 mb-6">Review Your Order</h2>
                 {/* Shipping summary */}
                 <div className="mb-6 p-4 bg-gray-50 rounded-xl">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Shipping To</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Shipping To</p>
+                    <button onClick={() => setStep('shipping')} className="text-xs text-amber-600 font-semibold hover:underline">Edit</button>
+                  </div>
                   <p className="text-sm font-semibold text-gray-900">{shipping.fullName}</p>
                   <p className="text-sm text-gray-600">{shipping.address}, {shipping.city}, {shipping.state} {shipping.zip}</p>
-                  <p className="text-sm text-gray-600">{shipping.email}</p>
+                  <p className="text-sm text-gray-600">{shipping.email} · {shipping.phone}</p>
                 </div>
                 {/* Items */}
                 <div className="space-y-3 mb-6">
-            {items.map(item => {
+                  {items.map(item => {
                     const images = item.product.images || item.product.product_images || [];
                     const img = images.find((i: any) => i.isPrimary || i.is_primary) ?? images[0];
                     const priceModifier = item.variant?.priceModifier ?? item.variant?.price_modifier ?? 0;
@@ -263,25 +278,42 @@ export function Checkout() {
                     );
                   })}
                 </div>
-                {!user && (
-                  <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                    <p className="text-sm text-amber-700">
-                      <button onClick={() => navigate('/auth')} className="font-bold underline">Sign in</button> to save your order history and get member benefits.
-                    </p>
+
+                {/* Payment info */}
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap className="w-4 h-4 text-amber-600" />
+                    <p className="text-sm font-bold text-amber-800">Secure Payment via Razorpay</p>
                   </div>
-                )}
-                <div className="flex gap-3">
-                  <button type="button" onClick={() => setStep('payment')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
+                  <p className="text-xs text-amber-700 ml-6">UPI, Cards, Net Banking, Wallets — all payment methods accepted. Your payment is protected by bank-grade encryption.</p>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button type="button" onClick={() => setStep('shipping')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
                     Back
                   </button>
                   <button
-                    onClick={handlePlaceOrder}
+                    onClick={handlePayWithRazorpay}
                     disabled={submitting}
                     className="flex-1 py-4 bg-amber-500 text-white font-bold text-lg rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
                   >
-                    <Shield className="w-5 h-5" />
-                    {submitting ? 'Placing Order...' : `Place Order • ${fmt(orderTotal)}`}
+                    {submitting ? (
+                      <>
+                        <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="w-5 h-5" />
+                        Pay {fmt(orderTotal)}
+                      </>
+                    )}
                   </button>
+                </div>
+
+                <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-gray-400" />
+                  <p className="text-xs text-gray-500">Payments are processed securely by Razorpay. We never store your card or banking details.</p>
                 </div>
               </div>
             )}

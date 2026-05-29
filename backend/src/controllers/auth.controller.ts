@@ -226,3 +226,82 @@ export async function googleAuth(req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+const auth0Schema = z.object({
+  accessToken: z.string(),
+});
+
+export async function auth0Auth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { accessToken } = auth0Schema.parse(req.body);
+    if (!accessToken) throw createError('Auth0 access token is required', 400);
+    if (!env.AUTH0_DOMAIN) throw createError('Auth0 is not configured on this server', 503);
+
+    const domain = env.AUTH0_DOMAIN.startsWith('http') ? env.AUTH0_DOMAIN : `https://${env.AUTH0_DOMAIN}`;
+    const userinfoRes = await fetch(`${domain}/userinfo`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!userinfoRes.ok) {
+      throw createError('Invalid Auth0 access token', 401);
+    }
+
+    const profile = await userinfoRes.json() as {
+      sub: string;
+      email: string;
+      name?: string;
+      nickname?: string;
+      picture?: string;
+      email_verified?: boolean;
+    };
+
+    if (!profile.email) {
+      throw createError('Email is required from Auth0 profile', 400);
+    }
+
+    const auth0Id = profile.sub;
+    const email = profile.email;
+    const fullName = profile.name || profile.nickname || email.split('@')[0];
+    const avatarUrl = profile.picture;
+    const isVerified = !!profile.email_verified;
+
+    let user = await User.findOne({ $or: [{ auth0Id }, { email }] });
+
+    if (user) {
+      if (!user.auth0Id) user.auth0Id = auth0Id;
+      if (avatarUrl && !user.avatarUrl) user.avatarUrl = avatarUrl;
+      if (isVerified) user.isVerified = true;
+      await user.save();
+    } else {
+      user = await User.create({
+        auth0Id,
+        email,
+        fullName,
+        avatarUrl,
+        isVerified,
+      });
+    }
+
+    if (!user.isActive) throw createError('Account is deactivated', 403);
+
+    const localAccessToken = generateAccessToken({ id: user.id, role: user.role });
+    const localRefreshToken = generateRefreshToken({ id: user.id });
+    user.refreshTokens.push(localRefreshToken);
+    if (user.refreshTokens.length > 5) user.refreshTokens.shift();
+    await user.save();
+    setRefreshCookie(res, localRefreshToken);
+
+    res.json({
+      success: true,
+      data: {
+        accessToken: localAccessToken,
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+

@@ -21,6 +21,7 @@ export interface IUser extends Document {
   phone?: string;
   role: 'customer' | 'admin';
   googleId?: string;
+  auth0Id?: string;
   isVerified: boolean;
   isActive: boolean;
   shippingAddress?: IAddress;
@@ -52,6 +53,7 @@ const UserSchema = new Schema<IUser>({
   phone: String,
   role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
   googleId: { type: String, sparse: true },
+  auth0Id: { type: String, sparse: true },
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   shippingAddress: AddressSchema,
@@ -71,7 +73,5 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-UserSchema.index({ email: 1 });
-UserSchema.index({ googleId: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

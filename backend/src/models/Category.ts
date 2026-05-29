@@ -22,7 +22,6 @@ const CategorySchema = new Schema<ICategory>({
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
-CategorySchema.index({ slug: 1 });
 CategorySchema.index({ parent: 1 });
 
 export const Category = mongoose.model<ICategory>('Category', CategorySchema);

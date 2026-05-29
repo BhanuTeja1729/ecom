@@ -10,9 +10,12 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().default('super-secret-refresh-key-change-in-production'),
   JWT_ACCESS_EXPIRES: z.string().default('15m'),
   JWT_REFRESH_EXPIRES: z.string().default('7d'),
-  FRONTEND_URL: z.string().default('http://localhost:5173'),
+  // FRONTEND_URL: z.string().default('http://localhost:5173'),
+  FRONTEND_URL: z.string().default('https://blipzo-rp5n.onrender.com'),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  AUTH0_DOMAIN: z.string().optional(),
+
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   RAZORPAY_KEY_ID: z.string().optional(),

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 let accessToken: string | null = null;
 
@@ -79,8 +79,8 @@ export const authApi = {
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/register', body),
   login: (body: { email: string; password: string }) =>
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/login', body),
-  googleAuth: (credential: string) =>
-    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/google', { credential }),
+  auth0Auth: (accessToken: string) =>
+    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/auth0', { accessToken }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get<{ success: boolean; data: UserData }>('/auth/me'),
 };
@@ -129,6 +129,18 @@ export const orderApi = {
   get: (orderNumber: string) => api.get<{ success: boolean; data: any }>(`/orders/${orderNumber}`),
 };
 
+// ─── Payments (Razorpay) ─────────────────────────────────────────────────────
+export const paymentApi = {
+  createOrder: (amount: number, currency = 'INR') =>
+    api.post<{ success: boolean; data: { orderId: string; amount: number; currency: string; keyId: string } }>(
+      '/payment/create-order', { amount, currency }
+    ),
+  verify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+    api.post<{ success: boolean; data: { verified: boolean; razorpay_order_id: string; razorpay_payment_id: string } }>(
+      '/payment/verify', data
+    ),
+};
+
 // ─── User ────────────────────────────────────────────────────────────────────
 export const userApi = {
   getProfile: () => api.get<{ success: boolean; data: UserData }>('/users/profile'),
@@ -151,6 +163,7 @@ export interface UserData {
   role: 'customer' | 'admin';
   avatarUrl?: string;
   phone?: string;
+  auth0Id?: string;
   shippingAddress?: any;
   wishlist?: string[];
 }

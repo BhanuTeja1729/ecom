@@ -25,7 +25,7 @@ const FAQS = [
   {
     category: 'Products & Availability',
     items: [
-      { q: 'Are your products authentic?', a: 'Yes, absolutely. All products sold on Luxe are 100% authentic and purchased directly from authorized manufacturers or official distributors. We have zero tolerance for counterfeits.' },
+      { q: 'Are your products authentic?', a: 'Yes, absolutely. All products sold on BLIPZO are 100% authentic and purchased directly from authorized manufacturers or official distributors. We have zero tolerance for counterfeits.' },
       { q: 'Will out-of-stock items come back?', a: 'Many popular items are restocked regularly. Use the "Notify Me" feature on out-of-stock product pages to receive an email when the item becomes available again.' },
       { q: 'Do you offer gift wrapping?', a: 'Yes! Premium gift wrapping is available for $5.99 per item. You can add a personalized message and we\'ll include it with beautiful tissue paper and a ribbon.' },
     ]

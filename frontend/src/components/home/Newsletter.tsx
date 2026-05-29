@@ -36,7 +36,7 @@ export function Newsletter() {
                 <span className="text-amber-400 text-sm font-semibold">Get 10% Off Your First Order</span>
               </div>
               <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tight mb-4">
-                Join the Luxe Community
+                Join the BLIPZO Community
               </h2>
               <p className="text-gray-400 leading-relaxed max-w-md">
                 Subscribe for exclusive early access, member-only deals, curated picks, and insider content delivered to your inbox.

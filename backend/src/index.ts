@@ -1,4 +1,5 @@
 import './config/env';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -18,16 +19,30 @@ import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
+import paymentRoutes from './routes/payment.routes';
 
 const app = express();
 
 // ─── Security Middleware ────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
 }));
 
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  'https://blipzo-rp5n.onrender.com',
+].filter(Boolean);
+
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -73,8 +88,18 @@ app.use(`${BASE}/categories`, categoryRoutes);
 app.use(`${BASE}/cart`, cartRoutes);
 app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
+app.use(`${BASE}/payment`, paymentRoutes);
 
-// ─── 404 & Error Handler ────────────────────────────────────────────────────
+// ─── Serve Frontend (production) ────────────────────────────────────────────
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDist));
+
+// SPA fallback — serve index.html for any non-API route
+app.get(/^(?!\/api).*/, (_, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
+// ─── 404 & Error Handler (API only) ─────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 

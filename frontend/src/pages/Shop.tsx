@@ -166,7 +166,6 @@ const CAT_COLORS = [
 
 /* ─── main Shop page ─────────────────────────────────────────────────────── */
 export function Shop({ categorySlug }: { categorySlug?: string }) {
-  const { navigate } = useRouter();
   const { addItem } = useCart();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -176,17 +175,34 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
   const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      categoryApi.list(),
-      productApi.list({ limit: '100', sort: 'createdAt', order: 'desc' }),
-    ])
-      .then(([cats, prods]) => {
-        setCategories(cats.data ?? []);
-        setAllProducts(prods.data ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    // Fetch categories once on mount
+    categoryApi.list()
+      .then(res => setCategories(res.data ?? []))
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setActiveCategory(categorySlug ?? '');
+  }, [categorySlug]);
+
+  // Fetch products from backend whenever active category or search changes
+  useEffect(() => {
+    setLoading(true);
+
+    const queryParams: Record<string, string> = {
+      limit: '200',
+      sort: 'createdAt',
+      order: 'desc',
+    };
+
+    // Pass categorySlug directly — backend now resolves slug → ObjectId
+    if (activeCategory) queryParams.categorySlug = activeCategory;
+
+    productApi.list(queryParams)
+      .then(res => setAllProducts(res.data ?? []))
+      .catch(() => setAllProducts([]))
+      .finally(() => setLoading(false));
+  }, [activeCategory]);
 
   function handleAdd(product: any) {
     addItem(product, null, 1);
@@ -194,21 +210,18 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
     setTimeout(() => setAddedId(null), 1500);
   }
 
-  /* Filter products by search + activeCategory */
+  // Filtered array applies case-insensitive search locally on the loaded products
   const filtered = allProducts.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !activeCategory || p.category?.slug === activeCategory || p.category === activeCategory;
-    return matchSearch && matchCat;
+    return !search || p.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  /* Group by category */
+  // Grouped by category when there is no search query or active category selected
   const grouped: { category: any; products: any[] }[] = [];
   if (!activeCategory && !search) {
     categories.forEach(cat => {
       const prods = allProducts.filter(p => p.category?.slug === cat.slug || p.category?._id === cat._id || p.category === cat._id);
       if (prods.length > 0) grouped.push({ category: cat, products: prods });
     });
-    // Uncategorised
     const uncatProds = allProducts.filter(p => !p.category);
     if (uncatProds.length > 0) grouped.push({ category: { name: 'Other', slug: '' }, products: uncatProds });
   }
