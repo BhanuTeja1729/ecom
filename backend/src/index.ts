@@ -1,4 +1,5 @@
 import './config/env';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -25,6 +26,7 @@ const app = express();
 // ─── Security Middleware ────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
 }));
 
 app.use(cors({
@@ -76,7 +78,16 @@ app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
 app.use(`${BASE}/payment`, paymentRoutes);
 
-// ─── 404 & Error Handler ────────────────────────────────────────────────────
+// ─── Serve Frontend (production) ────────────────────────────────────────────
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDist));
+
+// SPA fallback — serve index.html for any non-API route
+app.get(/^(?!\/api).*/, (_, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
+// ─── 404 & Error Handler (API only) ─────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
