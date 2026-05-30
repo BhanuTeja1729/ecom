@@ -3,6 +3,7 @@ import { Search, ChevronLeft, ChevronRight, Plus, X, ShoppingCart } from 'lucide
 import { productApi, categoryApi } from '../lib/api';
 import { useCart } from '../contexts/CartContext';
 import { useRouter } from '../lib/router';
+import { DeliveryBanner } from '../components/ui/DeliveryBanner';
 
 /* ─── tiny helper to scroll a ref left / right ─────────────────────────── */
 function scrollRow(ref: React.RefObject<HTMLDivElement | null>, dir: 'left' | 'right') {
@@ -250,6 +251,10 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Delivery availability banner */}
+        <div className="mb-6">
+          <DeliveryBanner />
+        </div>
         {/* ── Category icon strip ── */}
         {!loading && categories.length > 0 && (
           <div className="mb-8 -mx-4 px-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>

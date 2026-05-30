@@ -5,8 +5,8 @@ import { authApi, setAccessToken, getAccessToken, type UserData } from '../lib/a
 interface AuthContextValue {
   user: UserData | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string, loginRole?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, role?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
   signInWithAuth0: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -72,9 +72,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, [isAuthenticated, auth0User, auth0Loading]);
 
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string, loginRole?: 'customer' | 'delivery_partner') {
     try {
-      const res = await authApi.login({ email, password });
+      const res = await authApi.login({ email, password, loginRole });
       setAccessToken(res.data.accessToken);
       const userData = res.data.user;
       setUser({ ...userData, id: (userData as any)._id || userData.id });
@@ -84,9 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function signUp(email: string, password: string, fullName: string) {
+  async function signUp(email: string, password: string, fullName: string, role?: 'customer' | 'delivery_partner') {
     try {
-      const res = await authApi.register({ email, password, fullName });
+      const res = await authApi.register({ email, password, fullName, role });
       setAccessToken(res.data.accessToken);
       const userData = res.data.user;
       setUser({ ...userData, id: (userData as any)._id || userData.id });

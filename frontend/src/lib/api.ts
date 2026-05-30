@@ -75,9 +75,9 @@ export const api = {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export const authApi = {
-  register: (body: { fullName: string; email: string; password: string }) =>
+  register: (body: { fullName: string; email: string; password: string; role?: 'customer' | 'delivery_partner' }) =>
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/register', body),
-  login: (body: { email: string; password: string }) =>
+  login: (body: { email: string; password: string; loginRole?: 'customer' | 'delivery_partner' }) =>
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/login', body),
   auth0Auth: (accessToken: string) =>
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/auth0', { accessToken }),
@@ -119,7 +119,7 @@ export const cartApi = {
   add: (body: { productId: string; variantId?: string; quantity: number }) => api.post('/cart/items', body),
   update: (body: { productId: string; variantId?: string; quantity: number }) => api.put('/cart/items', body),
   clear: () => api.delete('/cart'),
-  applyCoupon: (code: string) => api.post('/cart/coupon', { code }),
+  applyCoupon: (code: string) => api.post<{ success: boolean; data: any }>('/cart/coupon', { code }),
 };
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -155,12 +155,26 @@ export const adminApi = {
   users: () => api.get<{ success: boolean; data: any[] }>('/users/admin/all'),
 };
 
+// ─── Delivery ────────────────────────────────────────────────────────────────
+export const deliveryApi = {
+  getAvailableOrders: () =>
+    api.get<{ success: boolean; data: any[] }>('/delivery/orders/available'),
+  getAssignedOrders: (type: 'active' | 'completed') =>
+    api.get<{ success: boolean; data: any[] }>(`/delivery/orders/assigned?type=${type}`),
+  claimOrder: (id: string) =>
+    api.put<{ success: boolean; data: any }>(`/delivery/orders/${id}/claim`),
+  updateStatus: (id: string, status: 'processing' | 'shipped' | 'delivered', message?: string) =>
+    api.put<{ success: boolean; data: any }>(`/delivery/orders/${id}/status`, { status, message }),
+  getStats: () =>
+    api.get<{ success: boolean; data: any }>('/delivery/stats'),
+};
+
 export interface UserData {
   _id: string;
   id?: string;
   email: string;
   fullName: string;
-  role: 'customer' | 'admin';
+  role: 'customer' | 'delivery_partner' | 'admin';
   avatarUrl?: string;
   phone?: string;
   auth0Id?: string;

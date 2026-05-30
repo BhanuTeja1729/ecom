@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Check, ChevronRight, Shield, Lock, Truck, Zap } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, AlertTriangle, Navigation } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
+import { useLocation } from '../contexts/LocationContext';
 import { orderApi, paymentApi } from '../lib/api';
+import { DeliveryBanner } from '../components/ui/DeliveryBanner';
 
 declare global {
   interface Window {
@@ -12,7 +14,7 @@ declare global {
   }
 }
 
-type Step = 'shipping' | 'review';
+type Step = 'shipping' | 'schedule' | 'review';
 
 interface ShippingForm {
   fullName: string;
@@ -30,24 +32,108 @@ const EMPTY_SHIPPING: ShippingForm = {
   address: '', city: '', state: '', zip: '', country: 'India',
 };
 
+const TIME_SLOTS = [
+  { id: 'morning',   label: 'Morning',    time: '8:00 AM – 11:00 AM',  icon: '🌅' },
+  { id: 'midday',    label: 'Midday',     time: '11:00 AM – 2:00 PM',  icon: '☀️' },
+  { id: 'afternoon', label: 'Afternoon',  time: '2:00 PM – 5:00 PM',   icon: '🌤️' },
+  { id: 'evening',   label: 'Evening',    time: '5:00 PM – 8:00 PM',   icon: '🌇' },
+];
+
+function getNextDays(count: number): Date[] {
+  const days: Date[] = [];
+  const today = new Date();
+  // Start from tomorrow
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+function formatDateShort(d: Date): string {
+  return d.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatDateFull(d: Date): string {
+  return d.toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function isToday(d: Date): boolean {
+  const t = new Date();
+  return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
+}
+
+function isTomorrow(d: Date): boolean {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  return d.getDate() === t.getDate() && d.getMonth() === t.getMonth() && d.getFullYear() === t.getFullYear();
+}
+
+function getDayLabel(d: Date): string {
+  if (isToday(d)) return 'Today';
+  if (isTomorrow(d)) return 'Tomorrow';
+  return d.toLocaleDateString('en-IN', { weekday: 'short' });
+}
+
 export function Checkout() {
   const { items, subtotal, discount, total, coupon, clearCart } = useCart();
   const { user } = useAuth();
   const { toast } = useToast();
   const { navigate } = useRouter();
+  const { userCoords, isDeliveryAvailable, distanceFromInventory, geocodeAndCheckDistance, locationStatus, requestLocation } = useLocation();
 
   const [step, setStep] = useState<Step>('shipping');
   const [shipping, setShipping] = useState<ShippingForm>(EMPTY_SHIPPING);
   const [submitting, setSubmitting] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
 
+  // Schedule delivery state
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const deliveryDays = useMemo(() => getNextDays(7), []);
+
+  // Delivery location check state
+  const [deliverToSameLocation, setDeliverToSameLocation] = useState<boolean | null>(null);
+  const [shippingAddressDistance, setShippingAddressDistance] = useState<number | null>(null);
+  const [shippingAddressAvailable, setShippingAddressAvailable] = useState<boolean | null>(null);
+  const [checkingAddress, setCheckingAddress] = useState(false);
+
   const shippingCost = subtotal >= 999 ? 0 : 49;
   const tax = Math.round(total * 0.18);
   const orderTotal = total + shippingCost + tax;
   const fmt = (p: number) => '₹' + p.toLocaleString('en-IN');
 
-  function handleShippingSubmit(e: React.FormEvent) {
+  async function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // If user chose "deliver to different address", geocode the shipping address
+    if (deliverToSameLocation === false) {
+      setCheckingAddress(true);
+      const fullAddress = `${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
+      const result = await geocodeAndCheckDistance(fullAddress);
+      setShippingAddressDistance(result.distance);
+      setShippingAddressAvailable(result.available);
+      setCheckingAddress(false);
+
+      if (result.available === false) {
+        toast('Delivery is not available to this address. It is beyond our 25 km delivery range.', 'error');
+        return;
+      }
+      if (result.available === null) {
+        // Could not geocode — warn but let them continue
+        toast('Could not verify delivery availability for this address. You may proceed at your own risk.', 'warning');
+      }
+    }
+
+    setStep('schedule');
+  }
+
+  function handleScheduleSubmit() {
+    if (!selectedDate || !selectedSlot) {
+      toast('Please select a delivery date and time slot', 'error');
+      return;
+    }
     setStep('review');
   }
 
@@ -101,6 +187,8 @@ export function Checkout() {
               couponCode: coupon?.code ?? '',
               razorpayPaymentId: response.razorpay_payment_id,
               razorpayOrderId: response.razorpay_order_id,
+              scheduledDeliveryDate: selectedDate?.toISOString(),
+              scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
               items: items.map(item => ({
                 productId: item.product._id || item.product.id,
                 variantId: item.variant?._id || item.variant?.id,
@@ -165,6 +253,15 @@ export function Checkout() {
             <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-100">
               <Shield className="w-3 h-3" /> Payment Verified
             </div>
+            {selectedDate && selectedSlot && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
+                  <CalendarDays className="w-3 h-3" /> Scheduled Delivery
+                </div>
+                <p className="text-sm font-semibold text-gray-900 mt-2">{formatDateFull(selectedDate)}</p>
+                <p className="text-sm text-gray-600">{TIME_SLOTS.find(s => s.id === selectedSlot)?.time}</p>
+              </div>
+            )}
             <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{shipping.email}</strong></p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -182,6 +279,7 @@ export function Checkout() {
 
   const steps = [
     { id: 'shipping', label: 'Shipping' },
+    { id: 'schedule', label: 'Schedule' },
     { id: 'review', label: 'Review & Pay' },
   ];
   const stepIndex = steps.findIndex(s => s.id === step);
@@ -214,6 +312,98 @@ export function Checkout() {
                 <h2 className="text-xl font-black text-gray-900 mb-6 flex items-center gap-2">
                   <Truck className="w-5 h-5 text-amber-500" /> Shipping Information
                 </h2>
+
+                {/* Delivery location check */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin className="w-4 h-4 text-blue-600" />
+                    <p className="text-sm font-bold text-blue-800">Delivery Location Check</p>
+                  </div>
+                  <p className="text-xs text-blue-700 mb-4">Is this order being delivered to your current location?</p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliverToSameLocation(true);
+                        setShippingAddressDistance(null);
+                        setShippingAddressAvailable(null);
+                      }}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left ${
+                        deliverToSameLocation === true
+                          ? 'border-blue-500 bg-blue-50 shadow-md shadow-blue-100'
+                          : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        deliverToSameLocation === true ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                      }`}>
+                        {deliverToSameLocation === true && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">Yes, same location</p>
+                        <p className="text-xs text-gray-500">Deliver to my current place</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliverToSameLocation(false);
+                        setShippingAddressDistance(null);
+                        setShippingAddressAvailable(null);
+                      }}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left ${
+                        deliverToSameLocation === false
+                          ? 'border-blue-500 bg-blue-50 shadow-md shadow-blue-100'
+                          : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        deliverToSameLocation === false ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                      }`}>
+                        {deliverToSameLocation === false && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">No, different address</p>
+                        <p className="text-xs text-gray-500">I'll enter the delivery address</p>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Show current-location delivery status */}
+                  {deliverToSameLocation === true && (
+                    <div className="mt-4">
+                      <DeliveryBanner compact />
+                      {isDeliveryAvailable === false && (
+                        <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                          <p className="text-xs text-red-700 font-medium">
+                            Your current location is outside our delivery zone. You can still place the order, but delivery may not be available.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Show shipping address check result */}
+                  {deliverToSameLocation === false && shippingAddressAvailable !== null && (
+                    <div className="mt-4">
+                      <DeliveryBanner
+                        compact
+                        overrideDistance={shippingAddressDistance}
+                        overrideAvailable={shippingAddressAvailable}
+                      />
+                    </div>
+                  )}
+
+                  {deliverToSameLocation === false && checkingAddress && (
+                    <div className="mt-4">
+                      <DeliveryBanner compact checking />
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false },
@@ -238,17 +428,149 @@ export function Checkout() {
                     </div>
                   ))}
                 </div>
-                <button type="submit" className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
-                  Continue to Review <ChevronRight className="w-4 h-4" />
+
+                {deliverToSameLocation === null && (
+                  <p className="mt-4 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Please select a delivery location option above to continue.
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={deliverToSameLocation === null || checkingAddress}
+                  className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {checkingAddress ? (
+                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Checking availability…</>
+                  ) : (
+                    <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
+                  )}
                 </button>
               </form>
+            )}
+
+            {step === 'schedule' && (
+              <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                <h2 className="text-xl font-black text-gray-900 mb-2 flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-amber-500" /> Schedule Delivery
+                </h2>
+                <p className="text-sm text-gray-500 mb-6">Choose your preferred delivery date and time slot</p>
+
+                {/* Date selector */}
+                <div className="mb-8">
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-gray-400" /> Select Date
+                  </h3>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                    {deliveryDays.map((day) => {
+                      const isSelected = selectedDate?.toDateString() === day.toDateString();
+                      return (
+                        <button
+                          key={day.toISOString()}
+                          type="button"
+                          onClick={() => setSelectedDate(day)}
+                          className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${
+                            isSelected
+                              ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
+                              : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
+                          }`}
+                        >
+                          <span className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isSelected ? 'text-amber-600' : 'text-gray-400'}`}>
+                            {getDayLabel(day)}
+                          </span>
+                          <span className={`text-lg font-black ${isSelected ? 'text-amber-700' : 'text-gray-800'}`}>
+                            {day.getDate()}
+                          </span>
+                          <span className={`text-[10px] font-medium ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
+                            {day.toLocaleDateString('en-IN', { month: 'short' })}
+                          </span>
+                          {isSelected && (
+                            <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+                              <Check className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Time slot selector */}
+                <div className="mb-6">
+                  <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-400" /> Select Time Slot
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {TIME_SLOTS.map((slot) => {
+                      const isSelected = selectedSlot === slot.id;
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSelectedSlot(slot.id)}
+                          className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
+                            isSelected
+                              ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
+                              : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
+                          }`}
+                        >
+                          <span className="text-2xl">{slot.icon}</span>
+                          <div className="flex-1">
+                            <p className={`text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-gray-800'}`}>
+                              {slot.label}
+                            </p>
+                            <p className={`text-xs ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
+                              {slot.time}
+                            </p>
+                          </div>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                            isSelected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
+                          }`}>
+                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Selected summary */}
+                {selectedDate && selectedSlot && (
+                  <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Truck className="w-4 h-4 text-amber-600" />
+                      <p className="text-sm font-bold text-amber-800">Scheduled Delivery</p>
+                    </div>
+                    <p className="text-sm text-amber-700 ml-6">
+                      {formatDateFull(selectedDate)} · {TIME_SLOTS.find(s => s.id === selectedSlot)?.time}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep('shipping')}
+                    className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleScheduleSubmit}
+                    className="flex-1 py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2"
+                  >
+                    Continue to Review <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             )}
 
             {step === 'review' && !orderNumber && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <h2 className="text-xl font-black text-gray-900 mb-6">Review Your Order</h2>
                 {/* Shipping summary */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                <div className="mb-4 p-4 bg-gray-50 rounded-xl">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Shipping To</p>
                     <button onClick={() => setStep('shipping')} className="text-xs text-amber-600 font-semibold hover:underline">Edit</button>
@@ -257,6 +579,24 @@ export function Checkout() {
                   <p className="text-sm text-gray-600">{shipping.address}, {shipping.city}, {shipping.state} {shipping.zip}</p>
                   <p className="text-sm text-gray-600">{shipping.email} · {shipping.phone}</p>
                 </div>
+
+                {/* Delivery schedule summary */}
+                {selectedDate && selectedSlot && (
+                  <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-blue-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <CalendarDays className="w-3.5 h-3.5" /> Scheduled Delivery
+                      </p>
+                      <button onClick={() => setStep('schedule')} className="text-xs text-amber-600 font-semibold hover:underline">Edit</button>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">{formatDateFull(selectedDate)}</p>
+                    <p className="text-sm text-gray-600">
+                      {TIME_SLOTS.find(s => s.id === selectedSlot)?.icon}{' '}
+                      {TIME_SLOTS.find(s => s.id === selectedSlot)?.label} — {TIME_SLOTS.find(s => s.id === selectedSlot)?.time}
+                    </p>
+                  </div>
+                )}
+
                 {/* Items */}
                 <div className="space-y-3 mb-6">
                   {items.map(item => {
@@ -289,7 +629,7 @@ export function Checkout() {
                 </div>
 
                 <div className="flex gap-3 mt-6">
-                  <button type="button" onClick={() => setStep('shipping')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
+                  <button type="button" onClick={() => setStep('schedule')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
                     Back
                   </button>
                   <button
@@ -347,6 +687,18 @@ export function Checkout() {
                  <div className="flex justify-between text-sm text-gray-600"><span>GST (18%)</span><span>{fmt(tax)}</span></div>
                  <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
               </div>
+
+              {/* Delivery schedule in sidebar */}
+              {selectedDate && selectedSlot && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <CalendarDays className="w-3.5 h-3.5 text-blue-500" />
+                    <p className="text-xs font-bold text-blue-600">Scheduled Delivery</p>
+                  </div>
+                  <p className="text-xs text-gray-700 font-medium">{formatDateShort(selectedDate)}</p>
+                  <p className="text-xs text-gray-500">{TIME_SLOTS.find(s => s.id === selectedSlot)?.time}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

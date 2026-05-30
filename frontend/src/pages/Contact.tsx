@@ -38,7 +38,7 @@ export function Contact() {
 
   const CONTACT_INFO = [
     { icon: Mail, title: 'Email', value: '2804blipzoinnovationptv@gmail.com', sub: 'We reply within 24 hours' },
-    { icon: Phone, title: 'Phone', value: '+91-191-XXXXXXX', sub: 'Mon-Sat, 10am-6pm IST' },
+    { icon: Phone, title: 'Phone', value: '+91 7006464761, 8899590378', sub: 'Mon-Sat, 10am-6pm IST' },
     { icon: MapPin, title: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005', sub: 'Headquarters' },
   ];
 

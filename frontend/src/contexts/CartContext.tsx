@@ -1,5 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+
 // CartContext uses 'any' for product/variant to support both MongoDB and legacy shapes
+interface CartItemLocal {
+  id: string;
+  product: any;
+  variant?: any;
+  quantity: number;
+}
+
+type Coupon = any;
 
 interface CartContextValue {
   items: any[];

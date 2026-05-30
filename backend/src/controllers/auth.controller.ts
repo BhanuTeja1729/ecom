@@ -11,12 +11,14 @@ const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 const registerSchema = z.object({
   fullName: z.string().min(2).max(100),
   email: z.string().email(),
-  password: z.string().min(8).max(72),
+  password: z.string().min(6).max(72),
+  role: z.enum(['customer', 'delivery_partner']).default('customer'),
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  loginRole: z.enum(['customer', 'delivery_partner']).optional(),
 });
 
 function setRefreshCookie(res: Response, token: string) {
@@ -31,12 +33,12 @@ function setRefreshCookie(res: Response, token: string) {
 
 export async function register(req: Request, res: Response, next: NextFunction) {
   try {
-    const { fullName, email, password } = registerSchema.parse(req.body);
+    const { fullName, email, password, role } = registerSchema.parse(req.body);
 
     const existing = await User.findOne({ email });
     if (existing) throw createError('Email already registered', 409);
 
-    const user = await User.create({ fullName, email, password });
+    const user = await User.create({ fullName, email, password, role });
 
     const accessToken = generateAccessToken({ id: user.id, role: user.role });
     const refreshToken = generateRefreshToken({ id: user.id });
@@ -58,13 +60,21 @@ export async function register(req: Request, res: Response, next: NextFunction) 
 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email, password } = loginSchema.parse(req.body);
+    const { email, password, loginRole } = loginSchema.parse(req.body);
 
     const user = await User.findOne({ email }).select('+password');
     if (!user || !(await user.comparePassword(password))) {
       throw createError('Invalid email or password', 401);
     }
     if (!user.isActive) throw createError('Account is deactivated', 403);
+
+    // Role-based tab validation
+    if (loginRole === 'delivery_partner' && user.role !== 'delivery_partner') {
+      throw createError('This account is not registered as a Delivery Partner', 403);
+    }
+    if (loginRole === 'customer' && user.role === 'delivery_partner') {
+      throw createError('Please use the Delivery Partner tab to sign in', 403);
+    }
 
     const accessToken = generateAccessToken({ id: user.id, role: user.role });
     const refreshToken = generateRefreshToken({ id: user.id });

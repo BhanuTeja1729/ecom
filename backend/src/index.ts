@@ -20,6 +20,7 @@ import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
 import paymentRoutes from './routes/payment.routes';
+import deliveryRoutes from './routes/delivery.routes';
 
 const app = express();
 
@@ -89,6 +90,7 @@ app.use(`${BASE}/cart`, cartRoutes);
 app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
 app.use(`${BASE}/payment`, paymentRoutes);
+app.use(`${BASE}/delivery`, deliveryRoutes);
 
 // ─── Serve Frontend (production) ────────────────────────────────────────────
 const frontendDist = path.join(__dirname, '../../frontend/dist');

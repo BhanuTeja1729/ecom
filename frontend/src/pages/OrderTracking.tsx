@@ -152,7 +152,7 @@ export function OrderTracking() {
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500">
             Can't find your order?{' '}
-            <a href="/contact" className="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Contact our support team</a>
+            <a href="/about#contact" className="text-amber-600 font-semibold hover:text-amber-700 transition-colors">Contact our support team</a>
           </p>
         </div>
       </div>

@@ -39,6 +39,9 @@ export interface IOrder extends Document {
   razorpayPaymentId?: string;
   notes?: string;
   trackingNumber?: string;
+  scheduledDeliveryDate?: Date;
+  scheduledDeliverySlot?: string;
+  assignedDeliveryPartner?: mongoose.Types.ObjectId;
   statusHistory: IStatusEvent[];
   shippedAt?: Date;
   deliveredAt?: Date;
@@ -84,6 +87,9 @@ const OrderSchema = new Schema<IOrder>({
   razorpayPaymentId: String,
   notes: String,
   trackingNumber: String,
+  scheduledDeliveryDate: Date,
+  scheduledDeliverySlot: String,
+  assignedDeliveryPartner: { type: Schema.Types.ObjectId, ref: 'User' },
   statusHistory: [{ status: String, message: String, timestamp: { type: Date, default: Date.now } }],
   shippedAt: Date,
   deliveredAt: Date,

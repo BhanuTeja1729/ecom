@@ -86,7 +86,7 @@ export function FAQ() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         {filteredFaqs.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500">No questions match your search. <button onClick={() => navigate('/contact')} className="text-amber-600 font-bold">Contact us instead</button></p>
+            <p className="text-gray-500">No questions match your search. <button onClick={() => navigate('/about#contact')} className="text-amber-600 font-bold">Contact us instead</button></p>
           </div>
         ) : (
           <div className="space-y-10">
@@ -127,7 +127,7 @@ export function FAQ() {
           <h3 className="text-2xl font-black text-white mb-3">Still have questions?</h3>
           <p className="text-gray-400 mb-6">Our support team is available 7 days a week and typically responds within 2 hours.</p>
           <button
-            onClick={() => navigate('/contact')}
+            onClick={() => navigate('/about#contact')}
             className="px-8 py-3.5 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-400 transition-colors"
           >
             Contact Support

@@ -1,5 +1,22 @@
+import { useState, useEffect } from 'react';
 import { useRouter } from '../lib/router';
-import { ArrowRight, Award, Globe, Leaf, Users, Zap, Building2, FileText, MapPin, Calendar } from 'lucide-react';
+import { ArrowRight, Award, Globe, Leaf, Users, Zap, Building2, FileText, MapPin, Calendar, Mail, Phone, Send, CheckCircle } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Custom marker icon (amber/gold themed)
+const customIcon = new L.Icon({
+  iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-gold.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+// BLIPZO office coordinates — Dogra Hall, Rehari Mohalla, Jammu
+const OFFICE_LOCATION: [number, number] = [32.7304691, 74.8194695];
 
 const TEAM = [
   { name: 'Sanchit Sawhney', role: 'Director', location: 'Jammu & Kashmir' },
@@ -20,8 +37,28 @@ const COMPANY_DETAILS = [
   { icon: MapPin, label: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005' },
 ];
 
+const CONTACT_INFO = [
+  { icon: Mail, title: 'Email', value: '2804blipzoinnovationptv@gmail.com', sub: 'We reply within 24 hours' },
+  { icon: Phone, title: 'Phone', value: '+91 7006464761, +91 8899590378', sub: 'Mon-Sat, 10am-6pm IST' },
+  { icon: MapPin, title: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005', sub: 'Headquarters' },
+];
+
 export function About() {
   const { navigate } = useRouter();
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMapReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus('loading');
+    setTimeout(() => { setStatus('success'); setForm({ name: '', email: '', subject: '', message: '' }); }, 1500);
+  }
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
@@ -42,12 +79,12 @@ export function About() {
               >
                 About
               </button>
-              <button
-                onClick={() => navigate('/contact')}
+              <a
+                href="#contact"
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Contact
-              </button>
+              </a>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -94,9 +131,6 @@ export function About() {
               </p>
               <p className="text-gray-600 leading-relaxed mb-4">
                 Our registered address is M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, Jammu & Kashmir, India, 180005. We are a company built on innovation, trust, and the belief that exceptional products deserve an exceptional marketplace.
-              </p>
-              <p className="text-gray-600 leading-relaxed mb-6">
-                BLIPZO INNOVATIONS PRIVATE LIMITED has an authorised share capital of ₹15,00,000 and a paid-up capital of ₹1,00,000. The company is led by directors Sanchit Sawhney and Salamat Bhatti.
               </p>
               <button onClick={() => navigate('/shop')} className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors group">
                 Shop Now <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -196,6 +230,135 @@ export function About() {
         </div>
       </section>
 
+      {/* ── Contact Us Section ── */}
+      <section id="contact" className="py-20 bg-gray-50 scroll-mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-14">
+            <p className="text-amber-600 font-semibold text-sm uppercase tracking-wider mb-3">Get In Touch</p>
+            <h2 className="text-4xl font-black text-gray-900">Contact Us</h2>
+            <p className="text-gray-500 mt-3 max-w-md mx-auto">Have questions or need assistance? Our team is here to help. Reach out to us anytime.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            {/* Contact info + Map */}
+            <div className="space-y-5">
+              {CONTACT_INFO.map(({ icon: Icon, title, value, sub }) => (
+                <div key={title} className="bg-white rounded-2xl border border-gray-200 p-5 flex gap-4">
+                  <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900 text-sm">{title}</p>
+                    <p className="text-gray-700 text-sm mt-0.5">{value}</p>
+                    <p className="text-gray-400 text-xs mt-0.5">{sub}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Leaflet Map */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-5">
+                <p className="font-bold text-gray-900 text-sm mb-3">📍 Our Location</p>
+                <div className="rounded-xl overflow-hidden h-64 relative" style={{ zIndex: 0 }}>
+                  {mapReady && (
+                    <MapContainer
+                      center={OFFICE_LOCATION}
+                      zoom={15}
+                      scrollWheelZoom={false}
+                      style={{ height: '100%', width: '100%', borderRadius: '0.75rem' }}
+                      attributionControl={true}
+                    >
+                      <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <Marker position={OFFICE_LOCATION} icon={customIcon}>
+                        <Popup>
+                          <div style={{ textAlign: 'center', minWidth: 180 }}>
+                            <strong style={{ fontSize: 14, color: '#111' }}>BLIPZO Innovations</strong>
+                            <br />
+                            <span style={{ fontSize: 12, color: '#666' }}>
+                              Shop No. 11, Dogra Hall<br />
+                              Rehari Mohalla, Jammu<br />
+                              J&K, India – 180005
+                            </span>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    </MapContainer>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-xs text-gray-400">Jammu, Jammu & Kashmir, India</p>
+                  <a
+                    href={`https://www.google.com/maps?q=${OFFICE_LOCATION[0]},${OFFICE_LOCATION[1]}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors"
+                  >
+                    Open in Google Maps →
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact form */}
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl border border-gray-200 p-8">
+                {status === 'success' ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-8 h-8 text-emerald-500" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-900 mb-2">Message Sent!</h3>
+                    <p className="text-gray-500">We'll get back to you within 24 hours.</p>
+                    <button onClick={() => setStatus('idle')} className="mt-6 px-6 py-2.5 text-sm font-bold text-amber-600 hover:text-amber-700 transition-colors">
+                      Send Another Message
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="text-xl font-black text-gray-900 mb-6">Send us a message</h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name</label>
+                          <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Your Name" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email Address</label>
+                          <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Subject</label>
+                        <select value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} required className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none">
+                          <option value="">Select a subject...</option>
+                          <option>Order Issue</option>
+                          <option>Product Question</option>
+                          <option>Return / Refund</option>
+                          <option>Shipping</option>
+                          <option>Account Help</option>
+                          <option>Partnership / Wholesale</option>
+                          <option>Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Message</label>
+                        <textarea value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} placeholder="How can we help you?" required rows={5} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none resize-none" />
+                      </div>
+                      <button type="submit" disabled={status === 'loading'} className="w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                        <Send className="w-4 h-4" />
+                        {status === 'loading' ? 'Sending...' : 'Send Message'}
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ── */}
       <footer className="bg-gray-950 py-10 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -209,7 +372,7 @@ export function About() {
           <div className="flex gap-4 text-sm text-gray-500">
             <button onClick={() => navigate('/privacy')} className="hover:text-gray-300 transition-colors">Privacy</button>
             <button onClick={() => navigate('/terms')} className="hover:text-gray-300 transition-colors">Terms</button>
-            <button onClick={() => navigate('/contact')} className="hover:text-gray-300 transition-colors">Contact</button>
+            <a href="#contact" className="hover:text-gray-300 transition-colors">Contact</a>
           </div>
         </div>
       </footer>

@@ -19,7 +19,7 @@ export interface IUser extends Document {
   fullName: string;
   avatarUrl?: string;
   phone?: string;
-  role: 'customer' | 'admin';
+  role: 'customer' | 'delivery_partner' | 'admin';
   googleId?: string;
   auth0Id?: string;
   isVerified: boolean;
@@ -51,7 +51,7 @@ const UserSchema = new Schema<IUser>({
   fullName: { type: String, required: true, trim: true },
   avatarUrl: String,
   phone: String,
-  role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  role: { type: String, enum: ['customer', 'delivery_partner', 'admin'], default: 'customer' },
   googleId: { type: String, sparse: true },
   auth0Id: { type: String, sparse: true },
   isVerified: { type: Boolean, default: false },

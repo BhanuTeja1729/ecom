@@ -93,7 +93,7 @@ export function Landing() {
                 About
               </button>
               <button
-                onClick={() => navigate('/contact')}
+                onClick={() => navigate('/about#contact')}
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Contact
@@ -317,7 +317,7 @@ export function Landing() {
           <div className="flex gap-4 text-sm text-gray-500">
             <button onClick={() => navigate('/privacy')} className="hover:text-gray-300 transition-colors">Privacy</button>
             <button onClick={() => navigate('/terms')} className="hover:text-gray-300 transition-colors">Terms</button>
-            <button onClick={() => navigate('/contact')} className="hover:text-gray-300 transition-colors">Contact</button>
+            <button onClick={() => navigate('/about#contact')} className="hover:text-gray-300 transition-colors">Contact</button>
           </div>
         </div>
       </footer>

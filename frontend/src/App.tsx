@@ -2,6 +2,7 @@ import { RouterProvider, useRouter } from './lib/router';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { WishlistProvider } from './contexts/WishlistContext';
+import { LocationProvider } from './contexts/LocationContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -20,9 +21,9 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m
 const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
-const Contact = lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 const FAQ = lazy(() => import('./pages/FAQ').then(m => ({ default: m.FAQ })));
 const Legal = lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
+const DeliveryDashboard = lazy(() => import('./pages/DeliveryDashboard').then(m => ({ default: m.DeliveryDashboard })));
 
 // Loading skeleton fallback for Suspense page loading
 function PageLoader() {
@@ -34,7 +35,7 @@ function PageLoader() {
 }
 
 // Routes that skip the shared Header/Footer (have their own layout)
-const NO_LAYOUT_PATHS = ['/auth', '/', '/about', '/contact'];
+const NO_LAYOUT_PATHS = ['/auth', '/', '/about'];
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -58,8 +59,33 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return user ? <>{children}</> : null;
 }
 
+// Customer-only route guard: delivery partners get redirected to /delivery
+function CustomerRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const { navigate } = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    } else if (!loading && user?.role === 'delivery_partner') {
+      navigate('/delivery');
+    }
+  }, [user, loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user || user.role === 'delivery_partner') return null;
+  return <>{children}</>;
+}
+
 function AppRouter() {
-  const { path, params } = useRouter();
+  const { path, params, navigate } = useRouter();
 
   const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth');
 
@@ -67,21 +93,22 @@ function AppRouter() {
     // Public routes
     if (path === '/') return <Landing />;
     if (path === '/auth') return <Auth />;
+    if (path === '/contact') { navigate('/about'); return <PageLoader />; }
     if (path === '/about') return <About />;
-    if (path === '/contact') return <Contact />;
     if (path === '/faq') return <FAQ />;
     if (path === '/privacy') return <Legal page="privacy" />;
     if (path === '/terms') return <Legal page="terms" />;
     if (path === '/admin') return <Admin />;
+    if (path === '/delivery') return <ProtectedRoute><DeliveryDashboard /></ProtectedRoute>;
 
-    // Protected routes — shop, cart, checkout, dashboard, etc.
-    if (path === '/shop') return <ProtectedRoute><Shop /></ProtectedRoute>;
-    if (path.startsWith('/category/') && params.slug) return <ProtectedRoute><Shop categorySlug={params.slug} /></ProtectedRoute>;
-    if (path.startsWith('/product/') && params.slug) return <ProtectedRoute><ProductDetail slug={params.slug} /></ProtectedRoute>;
-    if (path === '/cart') return <ProtectedRoute><Cart /></ProtectedRoute>;
-    if (path === '/checkout') return <ProtectedRoute><Checkout /></ProtectedRoute>;
-    if (path === '/dashboard') return <ProtectedRoute><Dashboard /></ProtectedRoute>;
-    if (path === '/order-tracking') return <ProtectedRoute><OrderTracking /></ProtectedRoute>;
+    // Customer-only routes — delivery partners are redirected to /delivery
+    if (path === '/shop') return <CustomerRoute><Shop /></CustomerRoute>;
+    if (path.startsWith('/category/') && params.slug) return <CustomerRoute><Shop categorySlug={params.slug} /></CustomerRoute>;
+    if (path.startsWith('/product/') && params.slug) return <CustomerRoute><ProductDetail slug={params.slug} /></CustomerRoute>;
+    if (path === '/cart') return <CustomerRoute><Cart /></CustomerRoute>;
+    if (path === '/checkout') return <CustomerRoute><Checkout /></CustomerRoute>;
+    if (path === '/dashboard') return <CustomerRoute><Dashboard /></CustomerRoute>;
+    if (path === '/order-tracking') return <CustomerRoute><OrderTracking /></CustomerRoute>;
 
     return <NotFound />;
   }
@@ -123,13 +150,15 @@ export default function App() {
   return (
     <RouterProvider>
       <AuthProvider>
-        <WishlistProvider>
-          <CartProvider>
-            <ToastProvider>
-              <AppRouter />
-            </ToastProvider>
-          </CartProvider>
-        </WishlistProvider>
+        <LocationProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <ToastProvider>
+                <AppRouter />
+              </ToastProvider>
+            </CartProvider>
+          </WishlistProvider>
+        </LocationProvider>
       </AuthProvider>
     </RouterProvider>
   );

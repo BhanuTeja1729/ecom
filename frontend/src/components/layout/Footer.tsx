@@ -11,7 +11,7 @@ const LINKS = {
   ],
   Support: [
     { label: 'FAQ', href: '/faq' },
-    { label: 'Contact Us', href: '/contact' },
+    { label: 'Contact Us', href: '/about#contact' },
     { label: 'Order Tracking', href: '/order-tracking' },
     { label: 'Returns & Refunds', href: '/faq' },
     { label: 'Shipping Info', href: '/faq' },
@@ -45,9 +45,9 @@ export function Footer() {
                 <Mail className="w-4 h-4" />
                 2804blipzoinnovationptv@gmail.com
               </a>
-              <a href="tel:+91191XXXXXXX" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
+              <a href="tel:+917006464761" className="flex items-center gap-2.5 text-sm text-gray-400 hover:text-amber-400 transition-colors">
                 <Phone className="w-4 h-4" />
-                +91-191-XXXXXXX
+                +91 7006464761, +91 8899590378
               </a>
               <span className="flex items-center gap-2.5 text-sm text-gray-400">
                 <MapPin className="w-4 h-4 shrink-0" />

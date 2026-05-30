@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Zap } from 'lucide-react';
+import { Search, ShoppingCart, Heart, User, Menu, X, ChevronDown, Zap, MapPin } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
 import { useWishlist } from '../../contexts/WishlistContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useRouter, Link } from '../../lib/router';
+import { useLocation } from '../../contexts/LocationContext';
 import { categoryApi, productApi } from '../../lib/api';
 
 const NAV_LINKS = [
@@ -15,6 +16,7 @@ export function Header() {
   const { count: wishlistCount } = useWishlist();
   const { user, signOut, isAdmin } = useAuth();
   const { navigate, path } = useRouter();
+  const { isDeliveryAvailable, locationStatus, distanceFromInventory } = useLocation();
 
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,50 +64,66 @@ export function Header() {
     <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${headerBg}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white fill-white" />
-            </div>
-            <span className={`text-xl font-black tracking-tight ${textColor}`}>BLIPZO</span>
-          </Link>
+          {/* Logo + Location indicator */}
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+                <Zap className="w-4 h-4 text-white fill-white" />
+              </div>
+              <span className={`text-xl font-black tracking-tight ${textColor}`}>BLIPZO</span>
+            </Link>
+
+            {/* Delivery location badge — customers only */}
+            {user && user.role !== 'delivery_partner' && locationStatus === 'granted' && (
+              <div className={`hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold ${
+                isDeliveryAvailable
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                <MapPin className="w-3 h-3" />
+                {isDeliveryAvailable ? 'Delivery available' : `${distanceFromInventory} km away`}
+              </div>
+            )}
+          </div>
 
           {/* Desktop Nav */}
           <nav className="hidden lg:flex items-center gap-8">
-            {/* Shop with dropdown */}
-            <div
-              className="relative"
-              onMouseEnter={() => setShopMenuOpen(true)}
-              onMouseLeave={() => setShopMenuOpen(false)}
-            >
-              <button className={`flex items-center gap-1 text-sm font-semibold ${textColor} hover:text-amber-500 transition-colors`}>
-                Shop <ChevronDown className={`w-3.5 h-3.5 transition-transform ${shopMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {shopMenuOpen && (
-                <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-64">
-                  <div className="bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 p-3 grid grid-cols-1 gap-1">
-                    <button
-                      onClick={() => { navigate('/shop'); setShopMenuOpen(false); }}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 text-left group"
-                    >
-                      <span className="text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors">All Products</span>
-                    </button>
-                    {categories.map(cat => (
+            {/* Shop with dropdown — hidden for delivery partners */}
+            {user?.role !== 'delivery_partner' && (
+              <div
+                className="relative"
+                onMouseEnter={() => setShopMenuOpen(true)}
+                onMouseLeave={() => setShopMenuOpen(false)}
+              >
+                <button className={`flex items-center gap-1 text-sm font-semibold ${textColor} hover:text-amber-500 transition-colors`}>
+                  Shop <ChevronDown className={`w-3.5 h-3.5 transition-transform ${shopMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {shopMenuOpen && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-64">
+                    <div className="bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 p-3 grid grid-cols-1 gap-1">
                       <button
-                        key={cat.id}
-                        onClick={() => { navigate(`/category/${cat.slug}`); setShopMenuOpen(false); }}
+                        onClick={() => { navigate('/shop'); setShopMenuOpen(false); }}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 text-left group"
                       >
-                        <img src={cat.imageUrl || cat.image_url} alt={cat.name} className="w-8 h-8 rounded-lg object-cover" />
-                        <span className="text-sm font-medium text-gray-700 group-hover:text-amber-600 transition-colors">{cat.name}</span>
+                        <span className="text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors">All Products</span>
                       </button>
-                    ))}
+                      {categories.map(cat => (
+                        <button
+                          key={cat.id}
+                          onClick={() => { navigate(`/category/${cat.slug}`); setShopMenuOpen(false); }}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 text-left group"
+                        >
+                          <img src={cat.imageUrl || cat.image_url} alt={cat.name} className="w-8 h-8 rounded-lg object-cover" />
+                          <span className="text-sm font-medium text-gray-700 group-hover:text-amber-600 transition-colors">{cat.name}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
-            {NAV_LINKS.slice(1).map(link => (
+            {user?.role !== 'delivery_partner' && NAV_LINKS.slice(1).map(link => (
               <Link
                 key={link.href}
                 to={link.href}
@@ -177,30 +195,34 @@ export function Header() {
             </div>
 
             {/* Wishlist */}
-            <button
-              onClick={() => navigate('/dashboard')}
-              className={`relative w-9 h-9 flex items-center justify-center rounded-xl ${textColor} hover:bg-white/10 hover:text-amber-500 transition-all hidden sm:flex`}
-            >
-              <Heart className="w-5 h-5" />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {wishlistCount}
-                </span>
-              )}
-            </button>
+            {user?.role !== 'delivery_partner' && (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className={`relative w-9 h-9 flex items-center justify-center rounded-xl ${textColor} hover:bg-white/10 hover:text-amber-500 transition-all hidden sm:flex`}
+              >
+                <Heart className="w-5 h-5" />
+                {wishlistCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {wishlistCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Cart */}
-            <button
-              onClick={openCart}
-              className={`relative w-9 h-9 flex items-center justify-center rounded-xl ${textColor} hover:bg-white/10 hover:text-amber-500 transition-all`}
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                  {itemCount > 9 ? '9+' : itemCount}
-                </span>
-              )}
-            </button>
+            {user?.role !== 'delivery_partner' && (
+              <button
+                onClick={openCart}
+                className={`relative w-9 h-9 flex items-center justify-center rounded-xl ${textColor} hover:bg-white/10 hover:text-amber-500 transition-all`}
+              >
+                <ShoppingCart className="w-5 h-5" />
+                {itemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-amber-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                    {itemCount > 9 ? '9+' : itemCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* User */}
             {user ? (
@@ -215,12 +237,21 @@ export function Header() {
                         Admin Panel
                       </button>
                     )}
-                    <button onClick={() => navigate('/dashboard')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
-                      Dashboard
-                    </button>
-                    <button onClick={() => navigate('/order-tracking')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
-                      Order Tracking
-                    </button>
+                    {user.role === 'delivery_partner' && (
+                      <button onClick={() => navigate('/delivery')} className="w-full text-left px-3 py-2 text-sm text-amber-600 font-semibold hover:bg-amber-50 rounded-xl transition-colors">
+                        Delivery Portal
+                      </button>
+                    )}
+                    {user.role !== 'delivery_partner' && (
+                      <button onClick={() => navigate('/dashboard')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                        Dashboard
+                      </button>
+                    )}
+                    {user.role !== 'delivery_partner' && (
+                      <button onClick={() => navigate('/order-tracking')} className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                        Order Tracking
+                      </button>
+                    )}
                     <hr className="my-1 border-gray-100" />
                     <button onClick={() => signOut()} className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                       Sign Out
@@ -252,21 +283,29 @@ export function Header() {
       {mobileOpen && (
         <div className="lg:hidden bg-white border-t border-gray-100 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-1">
-            <button onClick={() => { navigate('/shop'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">All Products</button>
-            {categories.map(cat => (
-              <button key={cat.id} onClick={() => { navigate(`/category/${cat.slug}`); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-xl">
-                {cat.name}
-              </button>
-            ))}
-            <hr className="border-gray-100" />
-            {NAV_LINKS.slice(1).map(link => (
-              <button key={link.href} onClick={() => { navigate(link.href); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">
-                {link.label}
-              </button>
-            ))}
+            {user?.role !== 'delivery_partner' && (
+              <>
+                <button onClick={() => { navigate('/shop'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">All Products</button>
+                {categories.map(cat => (
+                  <button key={cat.id} onClick={() => { navigate(`/category/${cat.slug}`); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-xl">
+                    {cat.name}
+                  </button>
+                ))}
+                <hr className="border-gray-100" />
+                {NAV_LINKS.slice(1).map(link => (
+                  <button key={link.href} onClick={() => { navigate(link.href); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">
+                    {link.label}
+                  </button>
+                ))}
+              </>
+            )}
             {user ? (
               <>
-                <button onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">Dashboard</button>
+                {user.role === 'delivery_partner' ? (
+                  <button onClick={() => { navigate('/delivery'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl">Delivery Portal</button>
+                ) : (
+                  <button onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">Dashboard</button>
+                )}
                 {isAdmin && <button onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl">Admin Panel</button>}
                 <button onClick={() => { setMobileOpen(false); signOut(); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl">Sign Out</button>
               </>

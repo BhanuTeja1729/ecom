@@ -27,6 +27,8 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
   razorpayPaymentId: z.string().optional(),
   razorpayOrderId: z.string().optional(),
+  scheduledDeliveryDate: z.string().optional(),
+  scheduledDeliverySlot: z.string().optional(),
 });
 
 export async function createOrder(req: Request & { user?: any }, res: Response, next: NextFunction) {
@@ -96,6 +98,8 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       paymentStatus: data.razorpayPaymentId ? 'paid' : 'pending',
       razorpayPaymentId: data.razorpayPaymentId,
       razorpayOrderId: data.razorpayOrderId,
+      scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
+      scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
       statusHistory: [{ status: data.razorpayPaymentId ? 'confirmed' : 'pending', message: data.razorpayPaymentId ? 'Payment received via Razorpay' : 'Order placed', timestamp: new Date() }],
     });
