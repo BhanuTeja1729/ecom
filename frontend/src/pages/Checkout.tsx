@@ -225,6 +225,42 @@ export function Checkout() {
     }
   }
 
+  // ── TEST BYPASS: Skip Razorpay, create order directly ──────────────────────
+  async function handleTestBypass() {
+    if (!user) { navigate('/auth'); return; }
+    setSubmitting(true);
+    try {
+      const orderRes = await orderApi.create({
+        shippingAddress: {
+          fullName: shipping.fullName,
+          email: shipping.email,
+          phone: shipping.phone,
+          addressLine1: shipping.address,
+          city: shipping.city,
+          state: shipping.state,
+          postalCode: shipping.zip,
+          country: shipping.country,
+        },
+        paymentMethod: 'test_bypass',
+        couponCode: coupon?.code ?? '',
+        scheduledDeliveryDate: selectedDate?.toISOString(),
+        scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
+        items: items.map(item => ({
+          productId: item.product._id || item.product.id,
+          variantId: item.variant?._id || item.variant?.id,
+          quantity: item.quantity,
+        })),
+      });
+      setOrderNumber(orderRes.data.orderNumber);
+      clearCart();
+      toast('Test order placed successfully! (Payment bypassed)', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Test order creation failed.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   if (items.length === 0 && !orderNumber) {
     return (
       <div className="min-h-screen bg-gray-50 pt-20 flex items-center justify-center">
@@ -654,6 +690,26 @@ export function Checkout() {
                 <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
                   <Lock className="w-4 h-4 text-gray-400" />
                   <p className="text-xs text-gray-500">Payments are processed securely by Razorpay. We never store your card or banking details.</p>
+                </div>
+
+                {/* ── TEST BYPASS BUTTON ─────────────────────────────── */}
+                <div className="mt-4 p-4 bg-orange-50 border-2 border-dashed border-orange-300 rounded-xl">
+                  <p className="text-xs font-bold text-orange-700 mb-2 uppercase tracking-wider">🧪 Testing Mode</p>
+                  <p className="text-xs text-orange-600 mb-3">Skip Razorpay payment to test order tracking flow.</p>
+                  <button
+                    onClick={handleTestBypass}
+                    disabled={submitting}
+                    className="w-full py-3 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
+                  >
+                    {submitting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>🧪 Place Test Order (Skip Payment)</>
+                    )}
+                  </button>
                 </div>
               </div>
             )}

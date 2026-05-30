@@ -29,37 +29,80 @@ const checkoutSchema = z.object({
   razorpayOrderId: z.string().optional(),
   scheduledDeliveryDate: z.string().optional(),
   scheduledDeliverySlot: z.string().optional(),
+  items: z.array(z.object({
+    productId: z.string(),
+    variantId: z.string().optional().nullable(),
+    quantity: z.number().min(1),
+  })).optional(),
 });
 
 export async function createOrder(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const data = checkoutSchema.parse(req.body);
+
+    // Try DB cart first, then fall back to items from request body (frontend localStorage cart)
     const cartQuery = req.user?.id ? { user: req.user.id } : { sessionId: req.cookies?.sessionId };
     const cart = await Cart.findOne(cartQuery);
-    if (!cart || cart.items.length === 0) throw createError('Cart is empty', 400);
+    const hasDbCart = cart && cart.items.length > 0;
+    const hasBodyItems = data.items && data.items.length > 0;
+
+    if (!hasDbCart && !hasBodyItems) throw createError('Cart is empty', 400);
 
     // Verify stock and build order items
     const orderItems = [];
     let discountAmount = 0;
 
-    for (const item of cart.items) {
-      const product = await Product.findById(item.product);
-      if (!product || !product.isActive) throw createError(`Product "${item.name}" is no longer available`, 400);
-      if (product.inventory < item.quantity) throw createError(`Insufficient stock for "${item.name}"`, 400);
+    if (hasDbCart) {
+      // Use DB cart items
+      for (const item of cart!.items) {
+        const product = await Product.findById(item.product);
+        if (!product || !product.isActive) throw createError(`Product "${item.name}" is no longer available`, 400);
+        if (product.inventory < item.quantity) throw createError(`Insufficient stock for "${item.name}"`, 400);
 
-      orderItems.push({
-        product: product._id,
-        variantId: item.variantId,
-        productName: product.name,
-        price: item.price,
-        quantity: item.quantity,
-        total: item.price * item.quantity,
-        image: item.image,
-      });
+        orderItems.push({
+          product: product._id,
+          variantId: item.variantId,
+          productName: product.name,
+          price: item.price,
+          quantity: item.quantity,
+          total: item.price * item.quantity,
+          image: item.image,
+        });
+      }
+    } else {
+      // Use request body items (frontend localStorage cart)
+      for (const item of data.items!) {
+        const product = await Product.findById(item.productId);
+        if (!product || !product.isActive) throw createError(`Product is no longer available`, 400);
+        if (product.inventory < item.quantity) throw createError(`Insufficient stock for "${product.name}"`, 400);
+
+        // Resolve variant price modifier
+        let price = product.price;
+        let variantId = item.variantId;
+        if (variantId && product.variants && product.variants.length > 0) {
+          const variant = product.variants.find((v: any) => (v._id?.toString() || v.id) === variantId);
+          if (variant) {
+            price += (variant.priceModifier ?? 0);
+          }
+        }
+
+        const images = product.images || (product as any).product_images || [];
+        const primaryImg = images.find((img: any) => img.isPrimary || img.is_primary) ?? images[0];
+
+        orderItems.push({
+          product: product._id,
+          variantId: variantId || undefined,
+          productName: product.name,
+          price,
+          quantity: item.quantity,
+          total: price * item.quantity,
+          image: primaryImg?.url,
+        });
+      }
     }
 
     // Apply coupon
-    const couponCode = data.couponCode || cart.couponCode;
+    const couponCode = data.couponCode || (hasDbCart ? cart!.couponCode : undefined);
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode, isActive: true });
       if (coupon && (!coupon.expiresAt || coupon.expiresAt > new Date())) {
@@ -95,24 +138,26 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
       paymentMethod: data.paymentMethod,
-      paymentStatus: data.razorpayPaymentId ? 'paid' : 'pending',
+      paymentStatus: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'paid' : 'pending',
       razorpayPaymentId: data.razorpayPaymentId,
       razorpayOrderId: data.razorpayOrderId,
       scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
       scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
-      statusHistory: [{ status: data.razorpayPaymentId ? 'confirmed' : 'pending', message: data.razorpayPaymentId ? 'Payment received via Razorpay' : 'Order placed', timestamp: new Date() }],
+      statusHistory: [{ status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending', message: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? (data.paymentMethod === 'test_bypass' ? 'Test order — payment bypassed' : 'Payment received via Razorpay') : 'Order placed', timestamp: new Date() }],
     });
 
     // Reduce inventory
-    for (const item of cart.items) {
+    for (const item of orderItems) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { inventory: -item.quantity, soldCount: item.quantity },
       });
     }
 
-    // Clear cart
-    await Cart.findByIdAndUpdate(cart._id, { items: [], couponCode: undefined });
+    // Clear DB cart if it existed
+    if (hasDbCart) {
+      await Cart.findByIdAndUpdate(cart!._id, { items: [], couponCode: undefined });
+    }
 
     res.status(201).json({ success: true, data: order });
   } catch (err) { next(err); }
