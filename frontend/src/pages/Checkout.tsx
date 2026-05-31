@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, AlertTriangle, Navigation } from 'lucide-react';
+import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, AlertTriangle, Navigation, Home, Building2, Plus } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
 import { useLocation } from '../contexts/LocationContext';
-import { orderApi, paymentApi } from '../lib/api';
+import { orderApi, paymentApi, userApi } from '../lib/api';
 import { DeliveryBanner } from '../components/ui/DeliveryBanner';
 
 declare global {
@@ -20,7 +20,9 @@ interface ShippingForm {
   fullName: string;
   email: string;
   phone: string;
+  doorNo: string;
   address: string;
+  landmark: string;
   city: string;
   state: string;
   zip: string;
@@ -29,21 +31,22 @@ interface ShippingForm {
 
 const EMPTY_SHIPPING: ShippingForm = {
   fullName: '', email: '', phone: '',
-  address: '', city: '', state: '', zip: '', country: 'India',
+  doorNo: '', address: '', landmark: '',
+  city: '', state: '', zip: '', country: 'India',
 };
 
 const TIME_SLOTS = [
-  { id: 'morning',   label: 'Morning',    time: '8:00 AM – 11:00 AM',  icon: '🌅' },
-  { id: 'midday',    label: 'Midday',     time: '11:00 AM – 2:00 PM',  icon: '☀️' },
-  { id: 'afternoon', label: 'Afternoon',  time: '2:00 PM – 5:00 PM',   icon: '🌤️' },
-  { id: 'evening',   label: 'Evening',    time: '5:00 PM – 8:00 PM',   icon: '🌇' },
+  { id: 'morning',   label: 'Morning',    time: '8:00 AM – 11:00 AM',  icon: '🌅', startHour: 8 },
+  { id: 'midday',    label: 'Midday',     time: '11:00 AM – 2:00 PM',  icon: '☀️', startHour: 11 },
+  { id: 'afternoon', label: 'Afternoon',  time: '2:00 PM – 5:00 PM',   icon: '🌤️', startHour: 14 },
+  { id: 'evening',   label: 'Evening',    time: '5:00 PM – 8:00 PM',   icon: '🌇', startHour: 17 },
 ];
 
 function getNextDays(count: number): Date[] {
   const days: Date[] = [];
   const today = new Date();
-  // Start from tomorrow
-  for (let i = 1; i <= count; i++) {
+  // Start from today (i = 0) for same-day delivery
+  for (let i = 0; i < count; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     days.push(d);
@@ -98,6 +101,22 @@ export function Checkout() {
   const [shippingAddressDistance, setShippingAddressDistance] = useState<number | null>(null);
   const [shippingAddressAvailable, setShippingAddressAvailable] = useState<boolean | null>(null);
   const [checkingAddress, setCheckingAddress] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [addressMode, setAddressMode] = useState<'saved' | 'new'>('new');
+
+  // Load saved addresses
+  useEffect(() => {
+    if (user) {
+      userApi.getAddresses()
+        .then(r => {
+          const addrs = r.data ?? [];
+          setSavedAddresses(addrs);
+          if (addrs.length > 0) setAddressMode('saved');
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
   const shippingCost = subtotal >= 999 ? 0 : 49;
   const tax = Math.round(total * 0.18);
@@ -110,7 +129,7 @@ export function Checkout() {
     // If user chose "deliver to different address", geocode the shipping address
     if (deliverToSameLocation === false) {
       setCheckingAddress(true);
-      const fullAddress = `${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
+      const fullAddress = `${shipping.doorNo ? shipping.doorNo + ', ' : ''}${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
       const result = await geocodeAndCheckDistance(fullAddress);
       setShippingAddressDistance(result.distance);
       setShippingAddressAvailable(result.available);
@@ -177,7 +196,9 @@ export function Checkout() {
                 fullName: shipping.fullName,
                 email: shipping.email,
                 phone: shipping.phone,
+                doorNo: shipping.doorNo,
                 addressLine1: shipping.address,
+                landmark: shipping.landmark,
                 city: shipping.city,
                 state: shipping.state,
                 postalCode: shipping.zip,
@@ -235,7 +256,9 @@ export function Checkout() {
           fullName: shipping.fullName,
           email: shipping.email,
           phone: shipping.phone,
+          doorNo: shipping.doorNo,
           addressLine1: shipping.address,
+          landmark: shipping.landmark,
           city: shipping.city,
           state: shipping.state,
           postalCode: shipping.zip,
@@ -443,12 +466,87 @@ export function Checkout() {
                   )}
                 </div>
 
+                {/* Saved address picker */}
+                {savedAddresses.length > 0 && (
+                  <div className="mb-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setAddressMode('saved')}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                      >
+                        <MapPin className="w-3.5 h-3.5 inline mr-1.5" /> Saved Addresses
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAddressMode('new'); setSelectedAddressId(null); setShipping(EMPTY_SHIPPING); }}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                      >
+                        <Plus className="w-3.5 h-3.5 inline mr-1.5" /> New Address
+                      </button>
+                    </div>
+
+                    {addressMode === 'saved' && (
+                      <div className="space-y-2">
+                        {savedAddresses.map((addr: any) => (
+                          <button
+                            key={addr._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddressId(addr._id);
+                              setShipping({
+                                fullName: addr.fullName || '',
+                                email: addr.email || user?.email || '',
+                                phone: addr.phone || '',
+                                doorNo: addr.doorNo || '',
+                                address: addr.addressLine1 || '',
+                                landmark: addr.landmark || '',
+                                city: addr.city || '',
+                                state: addr.state || '',
+                                zip: addr.postalCode || '',
+                                country: addr.country || 'India',
+                              });
+                            }}
+                            className={`w-full text-left p-4 border-2 rounded-xl transition-all ${selectedAddressId === addr._id ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${selectedAddressId === addr._id ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
+                                {selectedAddressId === addr._id && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {addr.label && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md">
+                                      {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                                      {addr.label}
+                                    </span>
+                                  )}
+                                  <span className="font-bold text-gray-900 text-sm">{addr.fullName}</span>
+                                </div>
+                                <p className="text-sm text-gray-600 truncate">
+                                  {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
+                                </p>
+                                {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
+                                <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Show form fields when adding new address or no saved addresses */}
+                {(addressMode === 'new' || savedAddresses.length === 0) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false },
                     { key: 'email', label: 'Email Address', placeholder: 'john@example.com', full: false },
                     { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false },
-                    { key: 'address', label: 'Street Address', placeholder: '123 Main St, Apt 4B', full: true },
+                    { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', full: false },
+                    { key: 'address', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', full: true },
+                    { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', full: true },
                     { key: 'city', label: 'City', placeholder: 'Mumbai', full: false },
                     { key: 'state', label: 'State', placeholder: 'Maharashtra', full: false },
                     { key: 'zip', label: 'PIN Code', placeholder: '400001', full: false },
@@ -467,6 +565,7 @@ export function Checkout() {
                     </div>
                   ))}
                 </div>
+                )}
 
                 {deliverToSameLocation === null && (
                   <p className="mt-4 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
@@ -507,7 +606,16 @@ export function Checkout() {
                         <button
                           key={day.toISOString()}
                           type="button"
-                          onClick={() => setSelectedDate(day)}
+                          onClick={() => {
+                            setSelectedDate(day);
+                            // Clear slot if switching to today and the slot is now past
+                            if (isToday(day) && selectedSlot) {
+                              const slot = TIME_SLOTS.find(s => s.id === selectedSlot);
+                              if (slot && new Date().getHours() >= slot.startHour) {
+                                setSelectedSlot(null);
+                              }
+                            }
+                          }}
                           className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${
                             isSelected
                               ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
@@ -542,31 +650,42 @@ export function Checkout() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {TIME_SLOTS.map((slot) => {
                       const isSelected = selectedSlot === slot.id;
+                      const isSelectedToday = selectedDate && isToday(selectedDate);
+                      const currentHour = new Date().getHours();
+                      // Slot is past if today is selected and the slot's start hour has already passed
+                      const isPast = !!(isSelectedToday && currentHour >= slot.startHour);
                       return (
                         <button
                           key={slot.id}
                           type="button"
-                          onClick={() => setSelectedSlot(slot.id)}
+                          disabled={isPast}
+                          onClick={() => !isPast && setSelectedSlot(slot.id)}
                           className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-                            isSelected
+                            isPast
+                              ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                              : isSelected
                               ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
                               : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
                           }`}
                         >
                           <span className="text-2xl">{slot.icon}</span>
                           <div className="flex-1">
-                            <p className={`text-sm font-bold ${isSelected ? 'text-amber-700' : 'text-gray-800'}`}>
+                            <p className={`text-sm font-bold ${isPast ? 'text-gray-400' : isSelected ? 'text-amber-700' : 'text-gray-800'}`}>
                               {slot.label}
                             </p>
-                            <p className={`text-xs ${isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
+                            <p className={`text-xs ${isPast ? 'text-gray-400' : isSelected ? 'text-amber-500' : 'text-gray-400'}`}>
                               {slot.time}
                             </p>
                           </div>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                            isSelected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
-                          }`}>
-                            {isSelected && <Check className="w-3 h-3 text-white" />}
-                          </div>
+                          {isPast ? (
+                            <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
+                          ) : (
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                              isSelected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <Check className="w-3 h-3 text-white" />}
+                            </div>
+                          )}
                         </button>
                       );
                     })}

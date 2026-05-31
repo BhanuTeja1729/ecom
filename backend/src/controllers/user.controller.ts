@@ -109,3 +109,64 @@ export async function getAllUsers(req: Request, res: Response, next: NextFunctio
     res.json({ success: true, data: users, pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) } });
   } catch (err) { next(err); }
 }
+
+// ─── Address CRUD ────────────────────────────────────────────────────────────
+
+export async function getAddresses(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const user = await User.findById(req.user.id).lean();
+    if (!user) throw createError('User not found', 404);
+    res.json({ success: true, data: user.addresses || [] });
+  } catch (err) { next(err); }
+}
+
+const addressBodySchema = z.object({
+  label: z.string().optional(),
+  fullName: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  doorNo: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  landmark: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
+});
+
+export async function addAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const data = addressBodySchema.parse(req.body);
+    const user = await User.findById(req.user.id);
+    if (!user) throw createError('User not found', 404);
+    user.addresses.push(data as any);
+    await user.save();
+    res.status(201).json({ success: true, data: user.addresses });
+  } catch (err) { next(err); }
+}
+
+export async function updateAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const data = addressBodySchema.parse(req.body);
+    const user = await User.findById(req.user.id);
+    if (!user) throw createError('User not found', 404);
+    const addr = (user.addresses as any).id(req.params.addressId);
+    if (!addr) throw createError('Address not found', 404);
+    Object.assign(addr, data);
+    await user.save();
+    res.json({ success: true, data: user.addresses });
+  } catch (err) { next(err); }
+}
+
+export async function deleteAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) throw createError('User not found', 404);
+    const addr = (user.addresses as any).id(req.params.addressId);
+    if (!addr) throw createError('Address not found', 404);
+    addr.deleteOne();
+    await user.save();
+    res.json({ success: true, data: user.addresses });
+  } catch (err) { next(err); }
+}

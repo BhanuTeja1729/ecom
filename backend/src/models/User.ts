@@ -2,11 +2,15 @@ import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IAddress {
+  _id?: string;
+  label?: string;
   fullName?: string;
   email?: string;
   phone?: string;
+  doorNo?: string;
   addressLine1?: string;
   addressLine2?: string;
+  landmark?: string;
   city?: string;
   state?: string;
   postalCode?: string;
@@ -34,16 +38,19 @@ export interface IUser extends Document {
 }
 
 const AddressSchema = new Schema<IAddress>({
+  label: String,
   fullName: String,
   email: String,
   phone: String,
+  doorNo: String,
   addressLine1: String,
   addressLine2: String,
+  landmark: String,
   city: String,
   state: String,
   postalCode: String,
   country: String,
-}, { _id: false });
+}, { _id: true });
 
 const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },

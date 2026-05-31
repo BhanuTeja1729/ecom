@@ -51,7 +51,8 @@ export interface IOrder extends Document {
 
 const AddressSchema = new Schema<IAddress>({
   fullName: String, email: String, phone: String,
-  addressLine1: String, addressLine2: String,
+  doorNo: String, addressLine1: String, addressLine2: String,
+  landmark: String,
   city: String, state: String, postalCode: String, country: String,
 }, { _id: false });
 

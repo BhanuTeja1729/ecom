@@ -148,6 +148,10 @@ export const userApi = {
   updateProfile: (body: Partial<UserData>) => api.put('/users/profile', body),
   getWishlist: () => api.get<{ success: boolean; data: any[] }>('/users/wishlist'),
   toggleWishlist: (productId: string) => api.post('/users/wishlist/toggle', { productId }),
+  getAddresses: () => api.get<{ success: boolean; data: any[] }>('/users/addresses'),
+  addAddress: (body: any) => api.post<{ success: boolean; data: any[] }>('/users/addresses', body),
+  updateAddress: (addressId: string, body: any) => api.put<{ success: boolean; data: any[] }>(`/users/addresses/${addressId}`, body),
+  deleteAddress: (addressId: string) => api.delete<{ success: boolean; data: any[] }>(`/users/addresses/${addressId}`),
 };
 
 // ─── Admin ───────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut, Truck } from 'lucide-react';
+import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut, Truck, Plus, Pencil, Trash2, Home, Building2, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useToast } from '../contexts/ToastContext';
@@ -30,6 +30,16 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [profileForm, setProfileForm] = useState({ fullName: '', phone: '' });
   const [saving, setSaving] = useState(false);
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [addressForm, setAddressForm] = useState({
+    label: '', fullName: '', email: '', phone: '',
+    doorNo: '', addressLine1: '', addressLine2: '', landmark: '',
+    city: '', state: '', postalCode: '', country: 'India',
+  });
+  const [savingAddress, setSavingAddress] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/auth'); return; }
@@ -46,6 +56,12 @@ export function Dashboard() {
     if (tab !== 'wishlist' || wishlistIds.length === 0) { setWishlistProducts([]); return; }
     userApi.getWishlist().then(r => setWishlistProducts(r.data ?? [])).catch(() => {});
   }, [tab, wishlistIds]);
+
+  useEffect(() => {
+    if (!user || tab !== 'addresses') return;
+    setLoadingAddresses(true);
+    userApi.getAddresses().then(r => setAddresses(r.data ?? [])).catch(() => {}).finally(() => setLoadingAddresses(false));
+  }, [user, tab]);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
@@ -240,13 +256,163 @@ export function Dashboard() {
             )}
 
             {tab === 'addresses' && (
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h2 className="text-xl font-black text-gray-900 mb-6">Saved Addresses</h2>
-                <div className="text-center py-10">
-                  <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="font-bold text-gray-900 mb-2">No addresses saved</p>
-                  <p className="text-gray-500 text-sm">Your addresses will appear here after your first order</p>
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-black text-gray-900">Saved Addresses</h2>
+                  {!showAddressForm && (
+                    <button
+                      onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India' }); }}
+                      className="px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center gap-1.5"
+                    >
+                      <Plus className="w-4 h-4" /> Add Address
+                    </button>
+                  )}
                 </div>
+
+                {/* Address Form */}
+                {showAddressForm && (
+                  <div className="bg-white rounded-2xl border-2 border-amber-200 p-6 mb-6 shadow-sm">
+                    <div className="flex items-center justify-between mb-5">
+                      <h3 className="font-bold text-gray-900">{editingAddressId ? 'Edit Address' : 'Add New Address'}</h3>
+                      <button onClick={() => { setShowAddressForm(false); setEditingAddressId(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4 text-gray-500" /></button>
+                    </div>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      setSavingAddress(true);
+                      try {
+                        let res;
+                        if (editingAddressId) {
+                          res = await userApi.updateAddress(editingAddressId, addressForm);
+                        } else {
+                          res = await userApi.addAddress(addressForm);
+                        }
+                        setAddresses(res.data ?? []);
+                        setShowAddressForm(false);
+                        setEditingAddressId(null);
+                        toast(editingAddressId ? 'Address updated!' : 'Address added!', 'success');
+                      } catch (err: any) { toast(err.message || 'Failed to save', 'error'); }
+                      finally { setSavingAddress(false); }
+                    }} className="space-y-4">
+                      {/* Label */}
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Label</label>
+                        <div className="flex gap-2">
+                          {['Home', 'Work', 'Other'].map(l => (
+                            <button key={l} type="button" onClick={() => setAddressForm(f => ({ ...f, label: l }))} className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all flex items-center gap-1.5 ${addressForm.label === l ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                              {l === 'Home' ? <Home className="w-3.5 h-3.5" /> : l === 'Work' ? <Building2 className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {[
+                          { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', required: true },
+                          { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', required: true },
+                          { key: 'email', label: 'Email', placeholder: 'john@example.com', required: false },
+                          { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', required: true },
+                          { key: 'addressLine1', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', required: true, full: true },
+                          { key: 'addressLine2', label: 'Address Line 2 (optional)', placeholder: 'Apartment, building, floor', required: false, full: true },
+                          { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', required: false, full: true },
+                          { key: 'city', label: 'City', placeholder: 'Hyderabad', required: true },
+                          { key: 'state', label: 'State', placeholder: 'Telangana', required: true },
+                          { key: 'postalCode', label: 'PIN Code', placeholder: '500001', required: true },
+                          { key: 'country', label: 'Country', placeholder: 'India', required: false },
+                        ].map(field => (
+                          <div key={field.key} className={(field as any).full ? 'sm:col-span-2' : ''}>
+                            <label className="text-sm font-semibold text-gray-700 mb-1.5 block">{field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}</label>
+                            <input
+                              type="text"
+                              value={(addressForm as any)[field.key]}
+                              onChange={e => setAddressForm(f => ({ ...f, [field.key]: e.target.value }))}
+                              placeholder={field.placeholder}
+                              required={field.required}
+                              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button type="submit" disabled={savingAddress} className="px-6 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60">
+                          {savingAddress ? 'Saving...' : editingAddressId ? 'Update Address' : 'Save Address'}
+                        </button>
+                        <button type="button" onClick={() => { setShowAddressForm(false); setEditingAddressId(null); }} className="px-6 py-3 border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Address List */}
+                {loadingAddresses ? (
+                  <div className="space-y-3">{[1,2].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-gray-200 animate-pulse" />)}</div>
+                ) : addresses.length === 0 && !showAddressForm ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center">
+                    <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="font-bold text-gray-900 mb-2">No addresses saved</p>
+                    <p className="text-gray-500 text-sm mb-4">Save your delivery addresses for faster checkout</p>
+                    <button onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India' }); }} className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors">Add Your First Address</button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {addresses.map((addr: any) => (
+                      <div key={addr._id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:border-amber-200 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {addr.label && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
+                                  {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                                  {addr.label}
+                                </span>
+                              )}
+                              <p className="font-bold text-gray-900 text-sm">{addr.fullName}</p>
+                            </div>
+                            <p className="text-sm text-gray-600">
+                              {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
+                              {addr.addressLine2 && `, ${addr.addressLine2}`}
+                            </p>
+                            {addr.landmark && <p className="text-xs text-gray-500 mt-0.5">Near: {addr.landmark}</p>}
+                            <p className="text-sm text-gray-600">{addr.city}, {addr.state} {addr.postalCode}</p>
+                            {addr.phone && <p className="text-xs text-gray-500 mt-1">📞 {addr.phone}</p>}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingAddressId(addr._id);
+                                setAddressForm({
+                                  label: addr.label || '', fullName: addr.fullName || '', email: addr.email || '', phone: addr.phone || '',
+                                  doorNo: addr.doorNo || '', addressLine1: addr.addressLine1 || '', addressLine2: addr.addressLine2 || '', landmark: addr.landmark || '',
+                                  city: addr.city || '', state: addr.state || '', postalCode: addr.postalCode || '', country: addr.country || 'India',
+                                });
+                                setShowAddressForm(true);
+                              }}
+                              className="p-2 border border-gray-200 rounded-lg hover:border-amber-300 hover:bg-amber-50 transition-all"
+                              title="Edit address"
+                            >
+                              <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!confirm('Delete this address?')) return;
+                                try {
+                                  const res = await userApi.deleteAddress(addr._id);
+                                  setAddresses(res.data ?? []);
+                                  toast('Address deleted', 'success');
+                                } catch { toast('Failed to delete', 'error'); }
+                              }}
+                              className="p-2 border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all"
+                              title="Delete address"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-gray-500" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

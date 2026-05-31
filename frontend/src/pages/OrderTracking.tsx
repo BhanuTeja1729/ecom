@@ -544,8 +544,9 @@ export function OrderTracking() {
                   </h3>
                   <div className="text-sm text-gray-600 space-y-1.5">
                     <p className="font-bold text-gray-900">{order.shippingAddress.fullName}</p>
-                    <p>{order.shippingAddress.addressLine1}</p>
+                    <p>{order.shippingAddress.doorNo && `${order.shippingAddress.doorNo}, `}{order.shippingAddress.addressLine1}</p>
                     {order.shippingAddress.addressLine2 && <p>{order.shippingAddress.addressLine2}</p>}
+                    {order.shippingAddress.landmark && <p className="text-xs text-gray-500">Near: {order.shippingAddress.landmark}</p>}
                     <p>{order.shippingAddress.city}, {order.shippingAddress.state} {order.shippingAddress.postalCode}</p>
                     {order.shippingAddress.country && <p>{order.shippingAddress.country}</p>}
                   </div>

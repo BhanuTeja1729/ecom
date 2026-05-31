@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers } from '../controllers/user.controller';
+import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers, getAddresses, addAddress, updateAddress, deleteAddress } from '../controllers/user.controller';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
@@ -8,6 +8,12 @@ router.get('/profile', authenticate, getProfile);
 router.put('/profile', authenticate, updateProfile);
 router.get('/wishlist', authenticate, getWishlist);
 router.post('/wishlist/toggle', authenticate, toggleWishlist);
+
+// Addresses
+router.get('/addresses', authenticate, getAddresses);
+router.post('/addresses', authenticate, addAddress);
+router.put('/addresses/:addressId', authenticate, updateAddress);
+router.delete('/addresses/:addressId', authenticate, deleteAddress);
 
 // Admin
 router.get('/admin/stats', authenticate, requireAdmin, getAdminStats);
