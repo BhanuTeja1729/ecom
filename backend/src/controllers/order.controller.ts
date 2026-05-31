@@ -138,6 +138,7 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
       paymentMethod: data.paymentMethod,
+      status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending',
       paymentStatus: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'paid' : 'pending',
       razorpayPaymentId: data.razorpayPaymentId,
       razorpayOrderId: data.razorpayOrderId,
@@ -204,6 +205,47 @@ export async function updateOrderStatus(req: Request, res: Response, next: NextF
       { new: true }
     );
     if (!order) throw createError('Order not found', 404);
+    res.json({ success: true, data: order });
+  } catch (err) { next(err); }
+}
+
+export async function cancelOrder(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const order = await Order.findOne({ orderNumber: req.params.orderNumber });
+    if (!order) throw createError('Order not found', 404);
+
+    // Only the order owner or an admin can cancel
+    if (req.user?.role !== 'admin' && order.user?.toString() !== req.user?.id) {
+      throw createError('You are not authorized to cancel this order', 403);
+    }
+
+    // Only allow cancellation if no delivery partner has accepted
+    if (order.assignedDeliveryPartner) {
+      throw createError('Cannot cancel — a delivery partner has already been assigned. Please contact support.', 400);
+    }
+
+    // Only allow cancellation for pending/confirmed orders
+    if (!['pending', 'confirmed'].includes(order.status)) {
+      throw createError(`Cannot cancel an order with status "${order.status}". Only pending or confirmed orders can be cancelled.`, 400);
+    }
+
+    // Cancel the order
+    order.status = 'cancelled';
+    order.statusHistory.push({
+      status: 'cancelled',
+      message: req.body?.reason ? `Cancelled by customer: ${req.body.reason}` : 'Order cancelled by customer',
+      timestamp: new Date(),
+    });
+
+    await order.save();
+
+    // Restore inventory
+    for (const item of order.items) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { inventory: item.quantity, soldCount: -item.quantity },
+      });
+    }
+
     res.json({ success: true, data: order });
   } catch (err) { next(err); }
 }

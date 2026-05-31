@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut } from 'lucide-react';
+import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut, Truck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useToast } from '../contexts/ToastContext';
@@ -37,7 +37,7 @@ export function Dashboard() {
   }, [user, navigate]);
 
   useEffect(() => {
-    if (!user || tab !== 'orders') return;
+    if (!user || (tab !== 'orders' && tab !== 'overview')) return;
     setLoading(true);
     orderApi.list().then(r => setOrders(r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
   }, [user, tab]);
@@ -143,19 +143,55 @@ export function Dashboard() {
                   </div>
                 ) : orders.map((order: any) => {
                   const badge = ORDER_STATUS_BADGE[order.status] ?? ORDER_STATUS_BADGE.pending;
+                  // Get first few item images for thumbnails
+                  const itemImages = (order.items ?? [])
+                    .filter((item: any) => item.image)
+                    .slice(0, 3);
                   return (
-                    <div key={order._id} className="bg-white rounded-2xl border border-gray-200 p-5 hover:border-amber-200 transition-colors">
+                    <div
+                      key={order._id}
+                      className="bg-white rounded-2xl border border-gray-200 p-5 hover:border-amber-200 hover:shadow-md transition-all cursor-pointer group"
+                      onClick={() => navigate(`/order-tracking?order=${order.orderNumber}`)}
+                    >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                         <div>
-                          <p className="font-black text-gray-900">#{order.orderNumber}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-gray-900">#{order.orderNumber}</p>
+                            <Badge variant={badge.variant}>{badge.label}</Badge>
+                          </div>
                           <p className="text-xs text-gray-500 mt-0.5">{new Date(order.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Badge variant={badge.variant}>{badge.label}</Badge>
                           <span className="font-black text-gray-900">{fmt(order.total)}</span>
+                          {!['delivered', 'cancelled', 'refunded'].includes(order.status) && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/order-tracking?order=${order.orderNumber}`); }}
+                              className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center gap-1.5"
+                            >
+                              <Truck className="w-3.5 h-3.5" /> Track
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <p className="text-sm text-gray-500">{order.items?.length ?? 0} item(s)</p>
+                      <div className="flex items-center gap-3">
+                        {/* Product image thumbnails */}
+                        {itemImages.length > 0 && (
+                          <div className="flex -space-x-2">
+                            {itemImages.map((item: any, idx: number) => (
+                              <div key={idx} className="w-9 h-9 rounded-lg overflow-hidden border-2 border-white shadow-sm">
+                                <img src={item.image} alt={item.productName} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                            {(order.items?.length ?? 0) > 3 && (
+                              <div className="w-9 h-9 rounded-lg bg-gray-100 border-2 border-white flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                +{order.items.length - 3}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        <p className="text-sm text-gray-500">{order.items?.length ?? 0} item(s)</p>
+                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-amber-500 transition-colors ml-auto" />
+                      </div>
                     </div>
                   );
                 })}

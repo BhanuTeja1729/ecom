@@ -127,6 +127,7 @@ export const orderApi = {
   create: (body: any) => api.post<{ success: boolean; data: any }>('/orders', body),
   list: () => api.get<{ success: boolean; data: any[] }>('/orders'),
   get: (orderNumber: string) => api.get<{ success: boolean; data: any }>(`/orders/${orderNumber}`),
+  cancel: (orderNumber: string, reason?: string) => api.put<{ success: boolean; data: any }>(`/orders/${orderNumber}/cancel`, { reason }),
 };
 
 // ─── Payments (Razorpay) ─────────────────────────────────────────────────────

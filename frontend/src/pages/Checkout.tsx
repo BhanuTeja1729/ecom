@@ -301,8 +301,11 @@ export function Checkout() {
             <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{shipping.email}</strong></p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={() => navigate('/dashboard')} className="px-6 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors">
-              View Orders
+            <button onClick={() => navigate(`/order-tracking?order=${orderNumber}`)} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-400 transition-colors flex items-center justify-center gap-2">
+              <Truck className="w-4 h-4" /> Track Order
+            </button>
+            <button onClick={() => navigate('/dashboard')} className="px-6 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors">
+              View All Orders
             </button>
             <button onClick={() => navigate('/shop')} className="px-6 py-3 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
               Continue Shopping
