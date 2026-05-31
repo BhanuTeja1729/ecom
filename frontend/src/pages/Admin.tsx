@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Search, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Search, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { adminApi, orderApi, productApi, categoryApi } from '../lib/api';
@@ -14,6 +14,91 @@ interface InventoryEdit {
   threshold: string;
   saving: boolean;
   error: string | null;
+}
+
+function useTableSortAndFilter<T>(data: T[]) {
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
+  };
+
+  const handleFilter = (key: string, value: string) => setFilters(prev => ({ ...prev, [key]: value }));
+
+  const processedData = useMemo(() => {
+    let result = [...data];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) {
+        const query = value.toLowerCase();
+        result = result.filter((item: any) => {
+          const keys = key.split('.');
+          let val = item;
+          for (const k of keys) val = val?.[k];
+          return val != null && String(val).toLowerCase().includes(query);
+        });
+      }
+    });
+    if (sortConfig) {
+      result.sort((a: any, b: any) => {
+        const keys = sortConfig.key.split('.');
+        let valA = a, valB = b;
+        for (const k of keys) { valA = valA?.[k]; valB = valB?.[k]; }
+        if (typeof valA === 'string' && typeof valB === 'string') {
+          return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [data, sortConfig, filters]);
+
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortConfig?.key === columnKey) {
+      return sortConfig.direction === 'asc' ? <ArrowUp className="w-3.5 h-3.5 inline ml-1 text-amber-500" /> : <ArrowDown className="w-3.5 h-3.5 inline ml-1 text-amber-500" />;
+    }
+    return <ArrowUpDown className="w-3.5 h-3.5 inline ml-1 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />;
+  };
+
+  const FilterHeader = ({ columnKey, title, placeholder }: { columnKey: string, title: string, placeholder?: string }) => {
+    const [isSearch, setIsSearch] = useState(!!filters[columnKey]);
+
+    return (
+      <div className="flex items-center gap-1 group">
+        {isSearch && placeholder ? (
+          <input
+            autoFocus
+            type="text"
+            placeholder={placeholder}
+            value={filters[columnKey] || ''}
+            onClick={e => e.stopPropagation()}
+            onChange={e => handleFilter(columnKey, e.target.value)}
+            onBlur={() => !filters[columnKey] && setIsSearch(false)}
+            className="w-full px-2 py-1 text-xs border border-gray-200 rounded outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 font-normal shadow-sm"
+          />
+        ) : (
+          <span
+            onClick={() => placeholder && setIsSearch(true)}
+            className={`${placeholder ? 'cursor-pointer hover:text-gray-900 transition-colors' : ''} select-none font-semibold text-gray-500 group-hover:text-gray-700`}
+          >
+            {title}
+          </span>
+        )}
+        <button
+          onClick={(e) => { e.stopPropagation(); handleSort(columnKey); }}
+          className="flex-shrink-0 cursor-pointer rounded p-0.5 hover:bg-gray-100"
+        >
+          <SortIcon columnKey={columnKey} />
+        </button>
+      </div>
+    );
+  };
+
+  return { processedData, FilterHeader };
 }
 
 export function Admin() {
@@ -47,6 +132,10 @@ export function Admin() {
   const [deletePartnerLoading, setDeletePartnerLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const { processedData: sortedOrders, FilterHeader: OrderHeader } = useTableSortAndFilter(orders);
+  const { processedData: sortedProducts, FilterHeader: ProductHeader } = useTableSortAndFilter(products);
+  const { processedData: sortedCustomers, FilterHeader: CustomerHeader } = useTableSortAndFilter(customers);
+  const { processedData: sortedPartners, FilterHeader: PartnerHeader } = useTableSortAndFilter(partners);
   useEffect(() => { if (!loading && !isAdmin) navigate('/'); }, [isAdmin, loading, navigate]);
 
   const loadData = useCallback(async () => {
@@ -55,7 +144,7 @@ export function Admin() {
     try {
       const [statsRes, ordersRes, productsRes, catsRes] = await Promise.all([
         adminApi.stats(),
-        orderApi.list(),
+        orderApi.list({ all: 'true' }),
         productApi.list({ limit: '50', sort: 'createdAt', order: 'desc' }),
         categoryApi.list(),
       ]);
@@ -346,13 +435,23 @@ export function Admin() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        {['Order #', 'Date', 'Items', 'Total', 'Status'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold">{h}</th>
-                        ))}
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                          <OrderHeader columnKey="orderNumber" title="Order #" placeholder="Search order..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">
+                          <OrderHeader columnKey="createdAt" title="Date" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Items</th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
+                          <OrderHeader columnKey="total" title="Total" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">
+                          <OrderHeader columnKey="status" title="Status" placeholder="Filter status..." />
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                      {orders.map((o: any) => (
+                      {sortedOrders.map((o: any) => (
                         <tr key={o._id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-bold text-gray-900">#{o.orderNumber}</td>
                           <td className="px-4 py-3 text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
@@ -389,9 +488,25 @@ export function Admin() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
-                        {['Product', 'SKU', 'MRP', 'Discount', 'Selling Price', 'Stock', 'Threshold', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
-                        ))}
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-56">
+                          <ProductHeader columnKey="name" title="Product" placeholder="Search name..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
+                          <ProductHeader columnKey="sku" title="SKU" placeholder="Search SKU..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <ProductHeader columnKey="mrp" title="MRP" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Discount</th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <ProductHeader columnKey="price" title="Selling Price" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <ProductHeader columnKey="inventory" title="Stock" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Threshold</th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">Status</th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -405,7 +520,7 @@ export function Admin() {
                             ))}
                           </tr>
                         ))
-                        : products.map((p: any) => {
+                        : sortedProducts.map((p: any) => {
                           const img = (p.images || [])[0];
                           const isLow = p.inventory >= 0 && p.inventory <= (p.lowStockThreshold ?? 5);
                           const isOOS = p.inventory === 0;
@@ -544,25 +659,32 @@ export function Admin() {
                       <h2 className="font-black text-gray-900">All Customers</h2>
                       <p className="text-xs text-gray-500 mt-0.5">{stats.totalUsers ?? 0} registered customers</p>
                     </div>
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        placeholder="Search by name, email, or phone..."
-                        value={customerSearch}
-                        onChange={e => setCustomerSearch(e.target.value)}
-                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 w-full sm:w-72"
-                      />
-                    </div>
+
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
-                        <tr>
-                          {['Customer', 'Email', 'Phone', 'Joined', 'Orders', 'Total Spent', 'Status'].map(h => (
-                            <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
+                      <tr>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                          <CustomerHeader columnKey="fullName" title="Customer" placeholder="Search name..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                          <CustomerHeader columnKey="email" title="Email" placeholder="Search email..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">
+                          <CustomerHeader columnKey="phone" title="Phone" placeholder="Search phone..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
+                          <CustomerHeader columnKey="createdAt" title="Joined" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <CustomerHeader columnKey="orderCount" title="Orders" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
+                          <CustomerHeader columnKey="totalSpent" title="Total Spent" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Status</th>
+                      </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {customersLoading ? (
@@ -573,14 +695,14 @@ export function Admin() {
                               ))}
                             </tr>
                           ))
-                        ) : customers.length === 0 ? (
+                        ) : sortedCustomers.length === 0 ? (
                           <tr>
                             <td colSpan={7} className="px-4 py-12 text-center">
                               <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                               <p className="text-gray-500 text-sm">{customerSearch ? 'No customers found' : 'No customers yet'}</p>
                             </td>
                           </tr>
-                        ) : customers.map((c: any) => (
+                        ) : sortedCustomers.map((c: any) => (
                           <tr key={c._id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">
@@ -668,11 +790,28 @@ export function Admin() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
-                        <tr>
-                          {['Partner', 'Email', 'Phone', 'Status', 'Active', 'Completed', 'Earnings', 'Actions'].map(h => (
-                            <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
+                      <tr>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                          <PartnerHeader columnKey="fullName" title="Partner" placeholder="Search name..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                          <PartnerHeader columnKey="email" title="Email" placeholder="Search email..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">
+                          <PartnerHeader columnKey="phone" title="Phone" placeholder="Search phone..." />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">Status</th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <PartnerHeader columnKey="isActive" title="Active" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                          <PartnerHeader columnKey="completedDeliveries" title="Completed" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
+                          <PartnerHeader columnKey="totalEarnings" title="Earnings" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
+                      </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
                         {partnersLoading ? (
@@ -683,15 +822,14 @@ export function Admin() {
                               ))}
                             </tr>
                           ))
-                        ) : partners.length === 0 ? (
+                        ) : sortedPartners.length === 0 ? (
                           <tr>
                             <td colSpan={8} className="px-4 py-12 text-center">
                               <Truck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                              <p className="text-gray-500 text-sm">No delivery partners yet</p>
-                              <p className="text-gray-400 text-xs mt-1">Click "Add Partner" to create one</p>
+                              <p className="text-gray-500 text-sm">No delivery partners found</p>
                             </td>
                           </tr>
-                        ) : partners.map((p: any) => (
+                        ) : sortedPartners.map((p: any) => (
                           <tr key={p._id} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">

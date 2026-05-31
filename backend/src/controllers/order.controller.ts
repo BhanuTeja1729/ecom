@@ -171,7 +171,7 @@ export async function getOrders(req: Request & { user?: any }, res: Response, ne
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const query = req.user?.role === 'admin' ? {} : { user: req.user?.id };
+    const query = (req.user?.role === 'admin' && req.query.all === 'true') ? {} : { user: req.user?.id };
     const [orders, total] = await Promise.all([
       Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
       Order.countDocuments(query),
