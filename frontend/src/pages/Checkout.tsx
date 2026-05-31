@@ -87,7 +87,17 @@ export function Checkout() {
   const { userCoords, isDeliveryAvailable, distanceFromInventory, geocodeAndCheckDistance, locationStatus, requestLocation } = useLocation();
 
   const [step, setStep] = useState<Step>('shipping');
-  const [shipping, setShipping] = useState<ShippingForm>(EMPTY_SHIPPING);
+  const [shipping, setShipping] = useState<ShippingForm>(() => ({
+    ...EMPTY_SHIPPING,
+    email: user?.email || '',
+  }));
+
+  useEffect(() => {
+    if (user?.email && !shipping.email) {
+      setShipping(s => ({ ...s, email: user.email }));
+    }
+  }, [user, shipping.email]);
+
   const [submitting, setSubmitting] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
 
@@ -126,8 +136,8 @@ export function Checkout() {
   async function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // If user chose "deliver to different address", geocode the shipping address
-    if (deliverToSameLocation === false) {
+    // Geocode the shipping address for distance check (only for "Saved Address" mode)
+    if (deliverToSameLocation === false && shipping.address) {
       setCheckingAddress(true);
       const fullAddress = `${shipping.doorNo ? shipping.doorNo + ', ' : ''}${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
       const result = await geocodeAndCheckDistance(fullAddress);
@@ -140,8 +150,33 @@ export function Checkout() {
         return;
       }
       if (result.available === null) {
-        // Could not geocode — warn but let them continue
         toast('Could not verify delivery availability for this address. You may proceed at your own risk.', 'warning');
+      }
+    }
+
+    // Save new address to user account if checkbox is checked
+    if (addressMode === 'new' && user) {
+      const saveCheckbox = document.getElementById('saveNewAddress') as HTMLInputElement;
+      if (saveCheckbox?.checked) {
+        try {
+          const res = await userApi.addAddress({
+            label: (shipping as any).label || '',
+            fullName: shipping.fullName,
+            email: user.email,
+            phone: shipping.phone,
+            doorNo: shipping.doorNo,
+            addressLine1: shipping.address,
+            landmark: shipping.landmark,
+            city: shipping.city,
+            state: shipping.state,
+            postalCode: shipping.zip,
+            country: shipping.country,
+          });
+          setSavedAddresses(res.data ?? []);
+          toast('Address saved!', 'success');
+        } catch {
+          // Non-blocking
+        }
       }
     }
 
@@ -175,7 +210,7 @@ export function Checkout() {
         order_id: rzpOrder.orderId,
         prefill: {
           name: shipping.fullName,
-          email: shipping.email,
+          email: user.email,
           contact: shipping.phone,
         },
         theme: {
@@ -194,7 +229,7 @@ export function Checkout() {
             const orderRes = await orderApi.create({
               shippingAddress: {
                 fullName: shipping.fullName,
-                email: shipping.email,
+                email: user.email,
                 phone: shipping.phone,
                 doorNo: shipping.doorNo,
                 addressLine1: shipping.address,
@@ -254,7 +289,7 @@ export function Checkout() {
       const orderRes = await orderApi.create({
         shippingAddress: {
           fullName: shipping.fullName,
-          email: shipping.email,
+          email: user.email,
           phone: shipping.phone,
           doorNo: shipping.doorNo,
           addressLine1: shipping.address,
@@ -321,7 +356,7 @@ export function Checkout() {
                 <p className="text-sm text-gray-600">{TIME_SLOTS.find(s => s.id === selectedSlot)?.time}</p>
               </div>
             )}
-            <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{shipping.email}</strong></p>
+            <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{user?.email || shipping.email}</strong></p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={() => navigate(`/order-tracking?order=${orderNumber}`)} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-400 transition-colors flex items-center justify-center gap-2">
@@ -375,207 +410,221 @@ export function Checkout() {
                   <Truck className="w-5 h-5 text-amber-500" /> Shipping Information
                 </h2>
 
-                {/* Delivery location check */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                {/* Delivery method selector */}
+                <div className="mb-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                    <p className="text-sm font-bold text-blue-800">Delivery Location Check</p>
+                    <MapPin className="w-4 h-4 text-amber-500" />
+                    <p className="text-sm font-bold text-gray-800">Where should we deliver?</p>
                   </div>
-                  <p className="text-xs text-blue-700 mb-4">Is this order being delivered to your current location?</p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Current Location */}
                     <button
                       type="button"
                       onClick={() => {
                         setDeliverToSameLocation(true);
-                        setShippingAddressDistance(null);
-                        setShippingAddressAvailable(null);
+                        if (savedAddresses.length > 0) setAddressMode('saved'); else setAddressMode('new');
+                        setSelectedAddressId(null);
+                        setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
                       }}
-                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left ${
+                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
                         deliverToSameLocation === true
-                          ? 'border-blue-500 bg-blue-50 shadow-md shadow-blue-100'
-                          : 'border-gray-200 bg-white hover:border-blue-300'
+                          ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
+                          : 'border-gray-200 bg-white hover:border-amber-300'
                       }`}
                     >
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        deliverToSameLocation === true ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        deliverToSameLocation === true ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
                       }`}>
-                        {deliverToSameLocation === true && <Check className="w-3 h-3 text-white" />}
+                        <Navigation className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900">Yes, same location</p>
-                        <p className="text-xs text-gray-500">Deliver to my current place</p>
+                        <p className="text-sm font-bold text-gray-900">Current Location</p>
+                        <p className="text-xs text-gray-500">Use my GPS location</p>
                       </div>
                     </button>
 
+                    {/* Saved / Enter Address */}
                     <button
                       type="button"
                       onClick={() => {
                         setDeliverToSameLocation(false);
-                        setShippingAddressDistance(null);
-                        setShippingAddressAvailable(null);
+                        if (savedAddresses.length > 0) setAddressMode('saved'); else setAddressMode('new');
+                        setSelectedAddressId(null);
+                        setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
                       }}
-                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all text-left ${
+                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
                         deliverToSameLocation === false
-                          ? 'border-blue-500 bg-blue-50 shadow-md shadow-blue-100'
-                          : 'border-gray-200 bg-white hover:border-blue-300'
+                          ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
+                          : 'border-gray-200 bg-white hover:border-amber-300'
                       }`}
                     >
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        deliverToSameLocation === false ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        deliverToSameLocation === false ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
                       }`}>
-                        {deliverToSameLocation === false && <Check className="w-3 h-3 text-white" />}
+                        <MapPin className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900">No, different address</p>
-                        <p className="text-xs text-gray-500">I'll enter the delivery address</p>
+                        <p className="text-sm font-bold text-gray-900">Saved Address</p>
+                        <p className="text-xs text-gray-500">Choose or add an address</p>
                       </div>
                     </button>
                   </div>
 
-                  {/* Show current-location delivery status */}
+                  {/* Current location delivery banner */}
                   {deliverToSameLocation === true && (
                     <div className="mt-4">
                       <DeliveryBanner compact />
-                      {isDeliveryAvailable === false && (
-                        <div className="mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                          <p className="text-xs text-red-700 font-medium">
-                            Your current location is outside our delivery zone. You can still place the order, but delivery may not be available.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Show shipping address check result */}
-                  {deliverToSameLocation === false && shippingAddressAvailable !== null && (
-                    <div className="mt-4">
-                      <DeliveryBanner
-                        compact
-                        overrideDistance={shippingAddressDistance}
-                        overrideAvailable={shippingAddressAvailable}
-                      />
-                    </div>
-                  )}
-
-                  {deliverToSameLocation === false && checkingAddress && (
-                    <div className="mt-4">
-                      <DeliveryBanner compact checking />
                     </div>
                   )}
                 </div>
 
-                {/* Saved address picker */}
-                {savedAddresses.length > 0 && (
-                  <div className="mb-5">
-                    <div className="flex items-center gap-3 mb-3">
+                {/* Address selection — appears for BOTH options */}
+                {deliverToSameLocation !== null && (
+                  <div>
+                    {/* Tabs: Saved / New */}
+                    <div className="flex items-center gap-3 mb-4">
+                      {savedAddresses.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => { setAddressMode('saved'); setSelectedAddressId(null); setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' }); }}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                        >
+                          <MapPin className="w-3.5 h-3.5" /> Saved Addresses
+                          <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">{savedAddresses.length}</span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setAddressMode('saved')}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                        onClick={() => { setAddressMode('new'); setSelectedAddressId(null); setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' }); }}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
                       >
-                        <MapPin className="w-3.5 h-3.5 inline mr-1.5" /> Saved Addresses
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setAddressMode('new'); setSelectedAddressId(null); setShipping(EMPTY_SHIPPING); }}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                      >
-                        <Plus className="w-3.5 h-3.5 inline mr-1.5" /> New Address
+                        <Plus className="w-3.5 h-3.5" /> New Address
                       </button>
                     </div>
 
-                    {addressMode === 'saved' && (
-                      <div className="space-y-2">
-                        {savedAddresses.map((addr: any) => (
-                          <button
-                            key={addr._id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedAddressId(addr._id);
-                              setShipping({
-                                fullName: addr.fullName || '',
-                                email: addr.email || user?.email || '',
-                                phone: addr.phone || '',
-                                doorNo: addr.doorNo || '',
-                                address: addr.addressLine1 || '',
-                                landmark: addr.landmark || '',
-                                city: addr.city || '',
-                                state: addr.state || '',
-                                zip: addr.postalCode || '',
-                                country: addr.country || 'India',
-                              });
-                            }}
-                            className={`w-full text-left p-4 border-2 rounded-xl transition-all ${selectedAddressId === addr._id ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
-                          >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${selectedAddressId === addr._id ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
-                                {selectedAddressId === addr._id && <Check className="w-3 h-3 text-white" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  {addr.label && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md">
-                                      {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                                      {addr.label}
-                                    </span>
-                                  )}
-                                  <span className="font-bold text-gray-900 text-sm">{addr.fullName}</span>
+                    {/* Saved addresses list */}
+                    {addressMode === 'saved' && savedAddresses.length > 0 && (
+                      <div className="space-y-2 mb-4">
+                        {savedAddresses.map((addr: any) => {
+                          const isActive = selectedAddressId === addr._id;
+                          return (
+                            <button
+                              key={addr._id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAddressId(addr._id);
+                                setShipping({
+                                  fullName: addr.fullName || '',
+                                  email: addr.email || user?.email || '',
+                                  phone: addr.phone || '',
+                                  doorNo: addr.doorNo || '',
+                                  address: addr.addressLine1 || '',
+                                  landmark: addr.landmark || '',
+                                  city: addr.city || '',
+                                  state: addr.state || '',
+                                  zip: addr.postalCode || '',
+                                  country: addr.country || 'India',
+                                });
+                              }}
+                              className={`w-full text-left p-4 border-2 rounded-xl transition-all ${isActive ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isActive ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
+                                  {isActive && <Check className="w-3 h-3 text-white" />}
                                 </div>
-                                <p className="text-sm text-gray-600 truncate">
-                                  {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
-                                </p>
-                                {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
-                                <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    {addr.label && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md">
+                                        {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                                        {addr.label}
+                                      </span>
+                                    )}
+                                    <span className="font-bold text-gray-900 text-sm">{addr.fullName}</span>
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
+                                    {addr.addressLine2 && `, ${addr.addressLine2}`}
+                                  </p>
+                                  {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
+                                  <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
+                                  {addr.phone && <p className="text-xs text-gray-500 mt-0.5">📞 {addr.phone}</p>}
+                                </div>
                               </div>
-                            </div>
-                          </button>
-                        ))}
+                            </button>
+                          );
+                        })}
                       </div>
+                    )}
+
+                    {/* New address form */}
+                    {addressMode === 'new' && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Address Label</label>
+                          <div className="flex gap-2">
+                            {['Home', 'Work', 'Other'].map(l => (
+                              <button key={l} type="button" onClick={() => setShipping(s => ({ ...s, label: l } as any))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${(shipping as any).label === l ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                                {l === 'Home' ? <Home className="w-3 h-3" /> : l === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {[
+                            { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false, required: true },
+                            { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false, required: true },
+                            { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', full: false, required: true },
+                            { key: 'address', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', full: true, required: true },
+                            { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', full: true, required: false },
+                            { key: 'city', label: 'City', placeholder: 'Hyderabad', full: false, required: true },
+                            { key: 'state', label: 'State', placeholder: 'Telangana', full: false, required: true },
+                            { key: 'zip', label: 'PIN Code', placeholder: '500001', full: false, required: true },
+                            { key: 'country', label: 'Country', placeholder: 'India', full: false, required: false },
+                          ].map(field => (
+                            <div key={field.key} className={field.full ? 'sm:col-span-2' : ''}>
+                              <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
+                                {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
+                              </label>
+                              <input type="text" value={shipping[field.key as keyof ShippingForm] || ''} onChange={e => setShipping(s => ({ ...s, [field.key]: e.target.value }))} placeholder={field.placeholder} required={field.required} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
+                            </div>
+                          ))}
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" id="saveNewAddress" defaultChecked className="w-4 h-4 accent-amber-500 rounded" />
+                          <span className="text-sm text-gray-600 font-medium">Save this address for future orders</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Delivery check results */}
+                    {shippingAddressAvailable !== null && (
+                      <div className="mt-4"><DeliveryBanner compact overrideDistance={shippingAddressDistance} overrideAvailable={shippingAddressAvailable} /></div>
+                    )}
+                    {checkingAddress && (
+                      <div className="mt-4"><DeliveryBanner compact checking /></div>
                     )}
                   </div>
                 )}
 
-                {/* Show form fields when adding new address or no saved addresses */}
-                {(addressMode === 'new' || savedAddresses.length === 0) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false },
-                    { key: 'email', label: 'Email Address', placeholder: 'john@example.com', full: false },
-                    { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false },
-                    { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', full: false },
-                    { key: 'address', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', full: true },
-                    { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', full: true },
-                    { key: 'city', label: 'City', placeholder: 'Mumbai', full: false },
-                    { key: 'state', label: 'State', placeholder: 'Maharashtra', full: false },
-                    { key: 'zip', label: 'PIN Code', placeholder: '400001', full: false },
-                    { key: 'country', label: 'Country', placeholder: 'India', full: false },
-                  ].map(field => (
-                    <div key={field.key} className={field.full ? 'sm:col-span-2' : ''}>
-                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">{field.label}</label>
-                      <input
-                        type="text"
-                        value={shipping[field.key as keyof ShippingForm]}
-                        onChange={e => setShipping(s => ({ ...s, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                        required
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                      />
-                    </div>
-                  ))}
-                </div>
-                )}
-
+                {/* Validation */}
                 {deliverToSameLocation === null && (
                   <p className="mt-4 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" /> Please select a delivery location option above to continue.
+                    <MapPin className="w-3.5 h-3.5" /> Please select a delivery method to continue.
+                  </p>
+                )}
+                {deliverToSameLocation !== null && addressMode === 'saved' && !selectedAddressId && (
+                  <p className="mt-3 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Please select a saved address to continue.
                   </p>
                 )}
 
                 <button
                   type="submit"
-                  disabled={deliverToSameLocation === null || checkingAddress}
+                  disabled={deliverToSameLocation === null || checkingAddress || (addressMode === 'saved' && !selectedAddressId)}
                   className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {checkingAddress ? (
@@ -733,9 +782,28 @@ export function Checkout() {
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Shipping To</p>
                     <button onClick={() => setStep('shipping')} className="text-xs text-amber-600 font-semibold hover:underline">Edit</button>
                   </div>
-                  <p className="text-sm font-semibold text-gray-900">{shipping.fullName}</p>
-                  <p className="text-sm text-gray-600">{shipping.address}, {shipping.city}, {shipping.state} {shipping.zip}</p>
-                  <p className="text-sm text-gray-600">{shipping.email} · {shipping.phone}</p>
+                  {deliverToSameLocation === true ? (
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                        <Navigation className="w-3.5 h-3.5 text-amber-500" /> Current Location
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">Delivering to your current GPS location</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{shipping.fullName}</p>
+                      <p className="text-sm text-gray-600">
+                        {shipping.doorNo && `${shipping.doorNo}, `}{shipping.address}
+                      </p>
+                      {shipping.landmark && <p className="text-xs text-gray-500">Near: {shipping.landmark}</p>}
+                      <p className="text-sm text-gray-600">{shipping.city}, {shipping.state} {shipping.zip}</p>
+                      {(shipping.phone || user?.email || shipping.email) && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {shipping.phone}{shipping.phone && (user?.email || shipping.email) && ' · '}{user?.email || shipping.email}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Delivery schedule summary */}
