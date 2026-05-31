@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus } from 'lucide-react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Search, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { adminApi, orderApi, productApi, categoryApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductModal } from '../components/admin/ProductModal';
 
-type Tab = 'overview' | 'orders' | 'products' | 'customers';
+type Tab = 'overview' | 'orders' | 'products' | 'customers' | 'employees';
 
 interface InventoryEdit {
   productId: string;
@@ -29,6 +29,22 @@ export function Admin() {
   // Product CRUD modal
   const [modalProduct, setModalProduct] = useState<any | null | 'new'>(undefined); // undefined=closed
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+
+  // Customers state
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+
+  // Employees (delivery partners) state
+  const [partners, setPartners] = useState<any[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
+  const [showPartnerForm, setShowPartnerForm] = useState(false);
+  const [editingPartner, setEditingPartner] = useState<any | null>(null);
+  const [partnerForm, setPartnerForm] = useState({ fullName: '', email: '', phone: '', password: '' });
+  const [partnerSaving, setPartnerSaving] = useState(false);
+  const [partnerFormError, setPartnerFormError] = useState('');
+  const [deletePartnerTarget, setDeletePartnerTarget] = useState<any | null>(null);
+  const [deletePartnerLoading, setDeletePartnerLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { if (!loading && !isAdmin) navigate('/'); }, [isAdmin, loading, navigate]);
@@ -73,6 +89,72 @@ export function Admin() {
   }
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load customers when tab switches
+  useEffect(() => {
+    if (tab !== 'customers' || !isAdmin) return;
+    setCustomersLoading(true);
+    const params: Record<string, string> = {};
+    if (customerSearch) params.search = customerSearch;
+    adminApi.customers(params).then(r => setCustomers(r.data ?? [])).catch(() => {}).finally(() => setCustomersLoading(false));
+  }, [tab, isAdmin, customerSearch]);
+
+  // Load delivery partners when tab switches
+  useEffect(() => {
+    if (tab !== 'employees' || !isAdmin) return;
+    setPartnersLoading(true);
+    adminApi.deliveryPartners().then(r => setPartners(r.data ?? [])).catch(() => {}).finally(() => setPartnersLoading(false));
+  }, [tab, isAdmin]);
+
+  // ── Partner CRUD handlers ────────────────────────────────────────────────────
+  async function handleSavePartner(e: React.FormEvent) {
+    e.preventDefault();
+    setPartnerSaving(true);
+    setPartnerFormError('');
+    try {
+      if (editingPartner) {
+        const res = await adminApi.updateDeliveryPartner(editingPartner._id, {
+          fullName: partnerForm.fullName,
+          phone: partnerForm.phone || undefined,
+          password: partnerForm.password || undefined,
+        });
+        setPartners(prev => prev.map(p => p._id === editingPartner._id ? { ...p, ...res.data } : p));
+      } else {
+        if (!partnerForm.password) { setPartnerFormError('Password is required'); setPartnerSaving(false); return; }
+        const res = await adminApi.createDeliveryPartner({
+          fullName: partnerForm.fullName,
+          email: partnerForm.email,
+          phone: partnerForm.phone || undefined,
+          password: partnerForm.password,
+        });
+        setPartners(prev => [{ ...res.data, completedDeliveries: 0, activeDeliveries: 0, totalEarnings: 0 }, ...prev]);
+      }
+      setShowPartnerForm(false);
+      setEditingPartner(null);
+      setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
+    } catch (err: any) {
+      setPartnerFormError(err.message || 'Failed to save');
+    } finally { setPartnerSaving(false); }
+  }
+
+  async function handleDeletePartner() {
+    if (!deletePartnerTarget) return;
+    setDeletePartnerLoading(true);
+    try {
+      await adminApi.deleteDeliveryPartner(deletePartnerTarget._id);
+      setPartners(prev => prev.filter(p => p._id !== deletePartnerTarget._id));
+      setDeletePartnerTarget(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete');
+    } finally { setDeletePartnerLoading(false); }
+  }
+
+  async function togglePartnerActive(partner: any) {
+    try {
+      const res = await adminApi.updateDeliveryPartner(partner._id, { isActive: !partner.isActive });
+      setPartners(prev => prev.map(p => p._id === partner._id ? { ...p, ...res.data } : p));
+    } catch { /* ignore */ }
+  }
 
   // ── Inventory edit helpers ───────────────────────────────────────────────
   function startEdit(p: any) {
@@ -131,6 +213,7 @@ export function Admin() {
     { id: 'orders', label: `Orders (${stats.totalOrders ?? 0})`, icon: Package },
     { id: 'products', label: 'Inventory', icon: ShoppingBag },
     { id: 'customers', label: 'Customers', icon: Users },
+    { id: 'employees', label: 'Employees', icon: Truck },
   ] as const;
 
   // Low-stock summary for overview
@@ -454,10 +537,225 @@ export function Admin() {
 
             {/* ── Customers ── */}
             {tab === 'customers' && (
-              <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center py-16">
-                <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="font-bold text-gray-900 mb-2">Customer Management</p>
-                <p className="text-gray-500 text-sm">{stats.totalUsers ?? 0} registered customers</p>
+              <div className="space-y-4">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h2 className="font-black text-gray-900">All Customers</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">{stats.totalUsers ?? 0} registered customers</p>
+                    </div>
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search by name, email, or phone..."
+                        value={customerSearch}
+                        onChange={e => setCustomerSearch(e.target.value)}
+                        className="pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 w-full sm:w-72"
+                      />
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {['Customer', 'Email', 'Phone', 'Joined', 'Orders', 'Total Spent', 'Status'].map(h => (
+                            <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {customersLoading ? (
+                          [1,2,3,4].map(i => (
+                            <tr key={i}>
+                              {[1,2,3,4,5,6,7].map(j => (
+                                <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : customers.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-12 text-center">
+                              <Users className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                              <p className="text-gray-500 text-sm">{customerSearch ? 'No customers found' : 'No customers yet'}</p>
+                            </td>
+                          </tr>
+                        ) : customers.map((c: any) => (
+                          <tr key={c._id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
+                                  {(c.fullName || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <span className="font-semibold text-gray-900 text-sm">{c.fullName || '—'}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="flex items-center gap-1.5 text-gray-600 text-xs">
+                                <Mail className="w-3 h-3 text-gray-400" />{c.email}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="flex items-center gap-1.5 text-gray-600 text-xs">
+                                <Phone className="w-3 h-3 text-gray-400" />{c.phone || '—'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="flex items-center gap-1.5 text-gray-500 text-xs">
+                                <Calendar className="w-3 h-3 text-gray-400" />{new Date(c.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">
+                                <Package className="w-3 h-3" />{c.orderCount}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-bold text-emerald-600 text-sm flex items-center gap-0.5">
+                                <IndianRupee className="w-3 h-3" />{(c.totalSpent ?? 0).toLocaleString('en-IN')}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={c.isActive ? 'success' : 'error'}>{c.isActive ? 'Active' : 'Inactive'}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Employees (Delivery Partners) ── */}
+            {tab === 'employees' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                      <h2 className="font-black text-gray-900">Delivery Partners</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">{partners.length} delivery partner{partners.length !== 1 ? 's' : ''}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingPartner(null);
+                        setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
+                        setPartnerFormError('');
+                        setShowPartnerForm(true);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" /> Add Partner
+                    </button>
+                  </div>
+
+                  {/* Partner Stats Summary */}
+                  {partners.length > 0 && (
+                    <div className="grid grid-cols-3 gap-px bg-gray-100 border-b border-gray-100">
+                      {[
+                        { label: 'Total Partners', value: partners.length, color: 'text-gray-900' },
+                        { label: 'Total Deliveries', value: partners.reduce((s, p) => s + (p.completedDeliveries ?? 0), 0), color: 'text-blue-600' },
+                        { label: 'Total Earnings Paid', value: `₹${partners.reduce((s, p) => s + (p.totalEarnings ?? 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-600' },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="bg-white p-4 text-center">
+                          <p className="text-xs text-gray-500 font-semibold mb-1">{label}</p>
+                          <p className={`text-xl font-black ${color}`}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {['Partner', 'Email', 'Phone', 'Status', 'Active', 'Completed', 'Earnings', 'Actions'].map(h => (
+                            <th key={h} className="text-left px-4 py-3 text-xs text-gray-500 font-semibold whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {partnersLoading ? (
+                          [1,2,3].map(i => (
+                            <tr key={i}>
+                              {[1,2,3,4,5,6,7,8].map(j => (
+                                <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
+                              ))}
+                            </tr>
+                          ))
+                        ) : partners.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-4 py-12 text-center">
+                              <Truck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                              <p className="text-gray-500 text-sm">No delivery partners yet</p>
+                              <p className="text-gray-400 text-xs mt-1">Click "Add Partner" to create one</p>
+                            </td>
+                          </tr>
+                        ) : partners.map((p: any) => (
+                          <tr key={p._id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
+                                  {(p.fullName || 'D').charAt(0).toUpperCase()}
+                                </div>
+                                <span className="font-semibold text-gray-900 text-sm">{p.fullName || '—'}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600 text-xs">{p.email}</td>
+                            <td className="px-4 py-3 text-gray-600 text-xs">{p.phone || '—'}</td>
+                            <td className="px-4 py-3">
+                              <Badge variant={p.isActive ? 'success' : 'error'}>{p.isActive ? 'Active' : 'Inactive'}</Badge>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-100">
+                                <Truck className="w-3 h-3" />{p.activeDeliveries ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-100">
+                                <Check className="w-3 h-3" />{p.completedDeliveries ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-black text-emerald-600 text-sm">₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
+                              <p className="text-[10px] text-gray-400">@ ₹75/delivery</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => togglePartnerActive(p)}
+                                  title={p.isActive ? 'Deactivate' : 'Activate'}
+                                  className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${p.isActive ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100' : 'border-gray-300 bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                                >
+                                  {p.isActive ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingPartner(p);
+                                    setPartnerForm({ fullName: p.fullName || '', email: p.email || '', phone: p.phone || '', password: '' });
+                                    setPartnerFormError('');
+                                    setShowPartnerForm(true);
+                                  }}
+                                  title="Edit partner"
+                                  className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-amber-400 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setDeletePartnerTarget(p)}
+                                  title="Delete partner"
+                                  className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -492,6 +790,110 @@ export function Admin() {
               <button onClick={handleDelete} disabled={deleteLoading}
                 className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleteLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Partner Create/Edit Modal ── */}
+      {showPartnerForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-black text-gray-900">{editingPartner ? 'Edit Partner' : 'Add Delivery Partner'}</h3>
+              <button onClick={() => { setShowPartnerForm(false); setEditingPartner(null); }} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSavePartner} className="space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name <span className="text-red-400">*</span></label>
+                <input
+                  type="text" required
+                  value={partnerForm.fullName}
+                  onChange={e => setPartnerForm(f => ({ ...f, fullName: e.target.value }))}
+                  placeholder="Enter full name"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email <span className="text-red-400">*</span></label>
+                <input
+                  type="email" required
+                  value={partnerForm.email}
+                  onChange={e => setPartnerForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="partner@example.com"
+                  disabled={!!editingPartner}
+                  className={`w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${editingPartner ? 'bg-gray-50 text-gray-400' : ''}`}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Phone</label>
+                <input
+                  type="tel"
+                  value={partnerForm.phone}
+                  onChange={e => setPartnerForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+91 98765 43210"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
+                  Password {editingPartner ? <span className="text-gray-400 font-normal text-xs">(leave blank to keep current)</span> : <span className="text-red-400">*</span>}
+                </label>
+                <input
+                  type="password" required={!editingPartner}
+                  value={partnerForm.password}
+                  onChange={e => setPartnerForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder={editingPartner ? "••••••••" : "Min 6 characters"}
+                  minLength={6}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              {partnerFormError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {partnerFormError}
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={partnerSaving}
+                  className="flex-1 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {partnerSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {editingPartner ? 'Update Partner' : 'Create Partner'}
+                </button>
+                <button type="button" onClick={() => { setShowPartnerForm(false); setEditingPartner(null); }}
+                  className="px-6 py-3 border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Partner Confirmation ── */}
+      {deletePartnerTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 text-center mb-1">Delete Partner?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              <span className="font-semibold text-gray-700">{deletePartnerTarget.fullName}</span> will be permanently removed.
+              {(deletePartnerTarget.completedDeliveries ?? 0) > 0 && (
+                <span className="block text-xs text-amber-600 mt-1">This partner has {deletePartnerTarget.completedDeliveries} completed delivery(ies).</span>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletePartnerTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDeletePartner} disabled={deletePartnerLoading}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {deletePartnerLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 Delete
               </button>
             </div>

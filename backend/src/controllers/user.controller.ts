@@ -110,6 +110,171 @@ export async function getAllUsers(req: Request, res: Response, next: NextFunctio
   } catch (err) { next(err); }
 }
 
+// ─── Admin: Customers ────────────────────────────────────────────────────────
+
+export async function getCustomers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { page = '1', limit = '50', search = '' } = req.query as Record<string, string>;
+    const pageNum = parseInt(page), limitNum = parseInt(limit);
+
+    const filter: any = { role: 'customer' };
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const [customers, total] = await Promise.all([
+      User.find(filter).sort({ createdAt: -1 }).skip((pageNum - 1) * limitNum).limit(limitNum).lean(),
+      User.countDocuments(filter),
+    ]);
+
+    // Aggregate order stats for these customers
+    const customerIds = customers.map(c => c._id);
+    const orderStats = await Order.aggregate([
+      { $match: { user: { $in: customerIds } } },
+      {
+        $group: {
+          _id: '$user',
+          orderCount: { $sum: 1 },
+          totalSpent: { $sum: '$total' },
+          lastOrderAt: { $max: '$createdAt' },
+        },
+      },
+    ]);
+
+    const statsMap: Record<string, any> = {};
+    orderStats.forEach(s => { statsMap[s._id.toString()] = s; });
+
+    const data = customers.map(c => ({
+      ...c,
+      orderCount: statsMap[c._id.toString()]?.orderCount ?? 0,
+      totalSpent: statsMap[c._id.toString()]?.totalSpent ?? 0,
+      lastOrderAt: statsMap[c._id.toString()]?.lastOrderAt ?? null,
+    }));
+
+    res.json({
+      success: true,
+      data,
+      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+    });
+  } catch (err) { next(err); }
+}
+
+// ─── Admin: Delivery Partners ────────────────────────────────────────────────
+
+export async function getDeliveryPartners(req: Request, res: Response, next: NextFunction) {
+  try {
+    const partners = await User.find({ role: 'delivery_partner' }).sort({ createdAt: -1 }).lean();
+
+    // Aggregate delivery stats for all partners
+    const partnerIds = partners.map(p => p._id);
+    const deliveryStats = await Order.aggregate([
+      { $match: { assignedDeliveryPartner: { $in: partnerIds } } },
+      {
+        $group: {
+          _id: '$assignedDeliveryPartner',
+          completedCount: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
+          activeCount: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipped']] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    const statsMap: Record<string, any> = {};
+    deliveryStats.forEach(s => { statsMap[s._id.toString()] = s; });
+
+    const earningsPerDelivery = 75;
+    const data = partners.map(p => ({
+      ...p,
+      completedDeliveries: statsMap[p._id.toString()]?.completedCount ?? 0,
+      activeDeliveries: statsMap[p._id.toString()]?.activeCount ?? 0,
+      totalEarnings: (statsMap[p._id.toString()]?.completedCount ?? 0) * earningsPerDelivery,
+    }));
+
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+const deliveryPartnerSchema = z.object({
+  fullName: z.string().min(2).max(100),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  password: z.string().min(6).optional(),
+});
+
+export async function createDeliveryPartner(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = deliveryPartnerSchema.parse(req.body);
+    if (!data.password) throw createError('Password is required for new delivery partner', 400);
+
+    const existing = await User.findOne({ email: data.email });
+    if (existing) throw createError('A user with this email already exists', 409);
+
+    const partner = await User.create({
+      ...data,
+      role: 'delivery_partner',
+      isVerified: true,
+      isActive: true,
+    });
+
+    const result = partner.toObject();
+    delete (result as any).password;
+    delete (result as any).refreshTokens;
+
+    res.status(201).json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+const updatePartnerSchema = z.object({
+  fullName: z.string().min(2).max(100).optional(),
+  phone: z.string().optional(),
+  isActive: z.boolean().optional(),
+  password: z.string().min(6).optional(),
+});
+
+export async function updateDeliveryPartner(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const data = updatePartnerSchema.parse(req.body);
+
+    const partner = await User.findOne({ _id: id, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    Object.assign(partner, data);
+    await partner.save();
+
+    const result = partner.toObject();
+    delete (result as any).password;
+    delete (result as any).refreshTokens;
+
+    res.json({ success: true, data: result });
+  } catch (err) { next(err); }
+}
+
+export async function deleteDeliveryPartner(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+
+    const partner = await User.findOne({ _id: id, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    // Check for active deliveries
+    const activeOrders = await Order.countDocuments({
+      assignedDeliveryPartner: id,
+      status: { $in: ['confirmed', 'processing', 'shipped'] },
+    });
+    if (activeOrders > 0) {
+      throw createError(`Cannot delete: partner has ${activeOrders} active delivery(ies)`, 400);
+    }
+
+    await User.findByIdAndDelete(id);
+
+    res.json({ success: true, message: 'Delivery partner deleted' });
+  } catch (err) { next(err); }
+}
+
 // ─── Address CRUD ────────────────────────────────────────────────────────────
 
 export async function getAddresses(req: Request & { user?: any }, res: Response, next: NextFunction) {

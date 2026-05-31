@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers, getAddresses, addAddress, updateAddress, deleteAddress } from '../controllers/user.controller';
+import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers, getCustomers, getDeliveryPartners, createDeliveryPartner, updateDeliveryPartner, deleteDeliveryPartner, getAddresses, addAddress, updateAddress, deleteAddress } from '../controllers/user.controller';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
@@ -18,5 +18,10 @@ router.delete('/addresses/:addressId', authenticate, deleteAddress);
 // Admin
 router.get('/admin/stats', authenticate, requireAdmin, getAdminStats);
 router.get('/admin/all', authenticate, requireAdmin, getAllUsers);
+router.get('/admin/customers', authenticate, requireAdmin, getCustomers);
+router.get('/admin/delivery-partners', authenticate, requireAdmin, getDeliveryPartners);
+router.post('/admin/delivery-partners', authenticate, requireAdmin, createDeliveryPartner);
+router.put('/admin/delivery-partners/:id', authenticate, requireAdmin, updateDeliveryPartner);
+router.delete('/admin/delivery-partners/:id', authenticate, requireAdmin, deleteDeliveryPartner);
 
 export default router;

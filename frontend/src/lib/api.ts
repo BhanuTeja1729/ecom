@@ -158,6 +158,17 @@ export const userApi = {
 export const adminApi = {
   stats: () => api.get<{ success: boolean; data: any }>('/users/admin/stats'),
   users: () => api.get<{ success: boolean; data: any[] }>('/users/admin/all'),
+  customers: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api.get<{ success: boolean; data: any[]; pagination: any }>(`/users/admin/customers${qs}`);
+  },
+  deliveryPartners: () => api.get<{ success: boolean; data: any[] }>('/users/admin/delivery-partners'),
+  createDeliveryPartner: (body: { fullName: string; email: string; phone?: string; password: string }) =>
+    api.post<{ success: boolean; data: any }>('/users/admin/delivery-partners', body),
+  updateDeliveryPartner: (id: string, body: { fullName?: string; phone?: string; isActive?: boolean; password?: string }) =>
+    api.put<{ success: boolean; data: any }>(`/users/admin/delivery-partners/${id}`, body),
+  deleteDeliveryPartner: (id: string) =>
+    api.delete<{ success: boolean }>(`/users/admin/delivery-partners/${id}`),
 };
 
 // ─── Delivery ────────────────────────────────────────────────────────────────
