@@ -5,6 +5,7 @@ import { Cart } from '../models/Cart';
 import { Product } from '../models/Product';
 import { Coupon } from '../models/Coupon';
 import { createError } from '../middleware/error';
+import { getSettingValue } from '../models/Setting';
 import { generateOrderNumber, calculateOrderTotals } from '../utils/helpers';
 
 const addressSchema = z.object({
@@ -29,6 +30,7 @@ const checkoutSchema = z.object({
   razorpayOrderId: z.string().optional(),
   scheduledDeliveryDate: z.string().optional(),
   scheduledDeliverySlot: z.string().optional(),
+  deliveryDistance: z.number().optional(),
   items: z.array(z.object({
     productId: z.string(),
     variantId: z.string().optional().nullable(),
@@ -134,6 +136,15 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       shippingAmount
     );
 
+    // Calculate delivery payout from distance
+    const deliveryDistance = data.deliveryDistance;
+    if (deliveryDistance === undefined || deliveryDistance === null) {
+      throw createError('Delivery distance is required to complete the checkout.', 400);
+    }
+
+    const rate = await getSettingValue('deliveryRatePerKm', 15);
+    const deliveryPayout = Math.round((deliveryDistance * rate) * 100) / 100;
+
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       user: req.user?.id,
@@ -155,6 +166,8 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
       scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
+      deliveryDistanceKm: deliveryDistance,
+      deliveryPayout,
       statusHistory: [{ status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending', message: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? (data.paymentMethod === 'test_bypass' ? 'Test order — payment bypassed' : 'Payment received via Razorpay') : 'Order placed', timestamp: new Date() }],
     });
 

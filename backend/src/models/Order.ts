@@ -45,6 +45,8 @@ export interface IOrder extends Document {
   statusHistory: IStatusEvent[];
   shippedAt?: Date;
   deliveredAt?: Date;
+  deliveryDistanceKm?: number;
+  deliveryPayout?: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -94,6 +96,8 @@ const OrderSchema = new Schema<IOrder>({
   statusHistory: [{ status: String, message: String, timestamp: { type: Date, default: Date.now } }],
   shippedAt: Date,
   deliveredAt: Date,
+  deliveryDistanceKm: Number,
+  deliveryPayout: Number,
 }, { timestamps: true });
 
 OrderSchema.index({ user: 1 });

@@ -10,6 +10,7 @@
     "seed": "ts-node src/scripts/seed.ts",
     "upload:images": "ts-node src/scripts/upload-images.ts",
     "migrate:all-images": "ts-node src/scripts/migrate-all-images.ts",
+    "update-payouts": "ts-node src/scripts/updatePayouts.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

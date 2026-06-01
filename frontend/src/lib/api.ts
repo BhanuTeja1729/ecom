@@ -193,6 +193,8 @@ export const adminApi = {
   listCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons'),
   createCoupon: (body: any) => api.post<{ success: boolean; data: any }>('/coupons', body),
   deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
+  getDeliveryRate: () => api.get<{ success: boolean; data: number }>('/users/admin/delivery-rate'),
+  updateDeliveryRate: (rate: number) => api.post<{ success: boolean; data: number }>('/users/admin/delivery-rate', { rate }),
 };
 
 // ─── Delivery ────────────────────────────────────────────────────────────────

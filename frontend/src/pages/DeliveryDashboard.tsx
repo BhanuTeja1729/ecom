@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/Badge';
 
 type Tab = 'overview' | 'active' | 'available' | 'history' | 'profile';
 
-const ORDER_STATUS_DETAILS: Record<string, { variant: 'default'|'success'|'warning'|'error'|'dark'; label: string }> = {
+const ORDER_STATUS_DETAILS: Record<string, { variant: 'default' | 'success' | 'warning' | 'error' | 'dark'; label: string }> = {
   pending: { variant: 'warning', label: 'Pending Payment' },
   confirmed: { variant: 'default', label: 'Confirmed' },
   processing: { variant: 'default', label: 'Preparing Pickup' },
@@ -23,7 +23,7 @@ export function DeliveryDashboard() {
   const { navigate } = useRouter();
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>('overview');
-  const [stats, setStats] = useState<any>({ completedCount: 0, activeCount: 0, totalEarnings: 0, earningsPerDelivery: 75 });
+  const [stats, setStats] = useState<any>({ completedCount: 0, activeCount: 0, totalEarnings: 0, deliveryRatePerKm: 15 });
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
@@ -106,10 +106,10 @@ export function DeliveryDashboard() {
   async function handleUpdateStatus(orderId: string, status: 'shipped' | 'delivered', orderNumber: string) {
     setActionLoading(orderId);
     try {
-      const msg = status === 'shipped' 
+      const msg = status === 'shipped'
         ? 'Order has been picked up and is out for delivery.'
         : 'Order delivered and verified by delivery agent.';
-        
+
       const res = await deliveryApi.updateStatus(orderId, status, msg);
       if (res.success) {
         toast(`Order #${orderNumber} updated to ${status === 'shipped' ? 'Out for Delivery' : 'Delivered'}!`, 'success');
@@ -169,9 +169,9 @@ export function DeliveryDashboard() {
           <aside className="w-full lg:w-64 shrink-0">
             <nav className="bg-white rounded-2xl border border-gray-200 p-2 shadow-sm">
               {TABS.map(({ id, label, icon: Icon }) => (
-                <button 
-                  key={id} 
-                  onClick={() => setTab(id as Tab)} 
+                <button
+                  key={id}
+                  onClick={() => setTab(id as Tab)}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all text-left ${tab === id ? 'bg-gray-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
                 >
                   <Icon className="w-4 h-4" />
@@ -214,7 +214,7 @@ export function DeliveryDashboard() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                   {[
-                    { label: 'Total Earnings', value: fmt(stats.totalEarnings ?? 0), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100', desc: `₹${stats.earningsPerDelivery} per delivery` },
+                    { label: 'Total Earnings', value: fmt(stats.totalEarnings ?? 0), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100', desc: `Rate: ₹${stats.deliveryRatePerKm}/km` },
                     { label: 'Active Deliveries', value: stats.activeCount ?? 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'In progress shipments' },
                     { label: 'Completed Deliveries', value: stats.completedCount ?? 0, icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100', desc: 'Successfully delivered' },
                   ].map(({ label, value, icon: Icon, color, bg, border, desc }) => (
@@ -349,7 +349,10 @@ export function DeliveryDashboard() {
                             </div>
                             <div className="flex flex-col sm:text-right">
                               <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Estimated Pay</span>
-                              <span className="text-lg font-black text-emerald-600">{fmt(stats.earningsPerDelivery)}</span>
+                              <span className="text-lg font-black text-emerald-600">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                              {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
+                                <span className="text-[10px] text-gray-400 font-normal">({order.deliveryDistanceKm} km)</span>
+                              )}
                             </div>
                           </div>
 
@@ -425,21 +428,18 @@ export function DeliveryDashboard() {
                                 return (
                                   <div key={step.statusKey} className="flex items-center flex-1 last:flex-initial">
                                     <div className="flex flex-col items-center relative">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                                        isCompleted ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400 border border-gray-200'
-                                      } ${isActive ? 'ring-4 ring-amber-100 scale-110' : ''}`}>
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${isCompleted ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400 border border-gray-200'
+                                        } ${isActive ? 'ring-4 ring-amber-100 scale-110' : ''}`}>
                                         {stepIdx < currentIdx ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
                                       </div>
-                                      <span className={`text-[10px] font-bold mt-1.5 absolute top-8 whitespace-nowrap ${
-                                        isActive ? 'text-amber-600 font-black' : isCompleted ? 'text-gray-700' : 'text-gray-400'
-                                      }`}>
+                                      <span className={`text-[10px] font-bold mt-1.5 absolute top-8 whitespace-nowrap ${isActive ? 'text-amber-600 font-black' : isCompleted ? 'text-gray-700' : 'text-gray-400'
+                                        }`}>
                                         {step.label}
                                       </span>
                                     </div>
                                     {idx < 2 && (
-                                      <div className={`h-1 flex-1 mx-2 rounded-full transition-all ${
-                                        stepIdx < currentIdx ? 'bg-amber-500' : 'bg-gray-200'
-                                      }`} />
+                                      <div className={`h-1 flex-1 mx-2 rounded-full transition-all ${stepIdx < currentIdx ? 'bg-amber-500' : 'bg-gray-200'
+                                        }`} />
                                     )}
                                   </div>
                                 );
@@ -449,9 +449,9 @@ export function DeliveryDashboard() {
 
                           {/* Actions Console */}
                           <div className="border-t border-gray-100 pt-5 mt-10 flex flex-wrap gap-3 items-center justify-between">
-                            <a 
-                              href={`https://maps.google.com/?q=${encodeURIComponent(`${order.shippingAddress.addressLine1}, ${order.shippingAddress.city}, ${order.shippingAddress.postalCode}`)}`} 
-                              target="_blank" 
+                            <a
+                              href={`https://maps.google.com/?q=${encodeURIComponent(`${order.shippingAddress.addressLine1}, ${order.shippingAddress.city}, ${order.shippingAddress.postalCode}`)}`}
+                              target="_blank"
                               rel="noreferrer"
                               className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 bg-white transition-all shadow-sm"
                             >
@@ -506,7 +506,7 @@ export function DeliveryDashboard() {
                   <h2 className="text-xl font-black text-gray-900">Available Delivery Shipments ({availableOrders.length})</h2>
                   <button onClick={loadAvailableOrders} className="text-xs text-amber-600 font-bold hover:underline">Refresh Board</button>
                 </div>
-                
+
                 {dataLoading ? (
                   <div className="space-y-4">
                     {[1, 2].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-gray-200 animate-pulse shadow-sm" />)}
@@ -539,7 +539,10 @@ export function DeliveryDashboard() {
                         <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
                           <div className="text-left md:text-right">
                             <span className="text-[10px] text-gray-400 font-bold block uppercase">Est. Payout</span>
-                            <span className="font-black text-emerald-600 text-base">{fmt(stats.earningsPerDelivery)}</span>
+                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                            {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
+                              <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
+                            )}
                           </div>
                           <button
                             onClick={() => handleClaimOrder(order._id, order.orderNumber)}
@@ -593,7 +596,10 @@ export function DeliveryDashboard() {
                         </div>
                         <div className="text-left md:text-right shrink-0">
                           <span className="text-[10px] text-gray-400 font-bold block uppercase">Earned</span>
-                          <span className="font-black text-emerald-600 text-lg">{fmt(stats.earningsPerDelivery)}</span>
+                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                          {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
+                            <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -606,7 +612,7 @@ export function DeliveryDashboard() {
             {tab === 'profile' && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-xl font-black text-gray-900 mb-6">Delivery Partner Profile</h2>
-                
+
                 <div className="max-w-lg space-y-6">
                   {/* Avatar and Name */}
                   <div className="flex items-center gap-4">
@@ -645,7 +651,7 @@ export function DeliveryDashboard() {
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
                     <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider mb-1.5">Dispatch Information</h4>
                     <p className="text-xs text-amber-700 leading-relaxed">
-                      Your payout details are linked with your email address ({user.email}). The standard base fare is ₹75 per successful shipment. Earnings are processed at the end of each week cycle.
+                      Your payout details are linked with your email address ({user.email}). Payouts are calculated based on the delivery distance. Earnings are processed at the end of each week cycle.
                     </p>
                   </div>
                 </div>

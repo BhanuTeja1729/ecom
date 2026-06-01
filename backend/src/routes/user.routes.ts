@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers, getCustomers, getDeliveryPartners, createDeliveryPartner, updateDeliveryPartner, deleteDeliveryPartner, getAddresses, addAddress, updateAddress, deleteAddress } from '../controllers/user.controller';
+import { getProfile, updateProfile, getWishlist, toggleWishlist, getAdminStats, getAllUsers, getCustomers, getDeliveryPartners, createDeliveryPartner, updateDeliveryPartner, deleteDeliveryPartner, getAddresses, addAddress, updateAddress, deleteAddress, getDeliveryRate, updateDeliveryRate } from '../controllers/user.controller';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
 const router = Router();
@@ -23,5 +23,7 @@ router.get('/admin/delivery-partners', authenticate, requireAdmin, getDeliveryPa
 router.post('/admin/delivery-partners', authenticate, requireAdmin, createDeliveryPartner);
 router.put('/admin/delivery-partners/:id', authenticate, requireAdmin, updateDeliveryPartner);
 router.delete('/admin/delivery-partners/:id', authenticate, requireAdmin, deleteDeliveryPartner);
+router.get('/admin/delivery-rate', authenticate, getDeliveryRate);
+router.post('/admin/delivery-rate', authenticate, requireAdmin, updateDeliveryRate);
 
 export default router;

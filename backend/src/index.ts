@@ -113,6 +113,36 @@ app.use(errorHandler);
 async function start() {
   try {
     await connectDB();
+
+    // Run payout migration on server start/hot-reload
+    try {
+      const { Order } = await import('./models/Order');
+      const { getSettingValue } = await import('./models/Setting');
+      const rate = await getSettingValue('deliveryRatePerKm', 15);
+      console.log(`[Migration] Active delivery payout rate: ₹${rate}/km`);
+      const orders = await Order.find({});
+      let updatedCount = 0;
+      for (const order of orders) {
+        let changed = false;
+        if (order.deliveryDistanceKm === undefined || order.deliveryDistanceKm === null) {
+          order.deliveryDistanceKm = 5.0;
+          changed = true;
+        }
+        const expectedPayout = Math.round((order.deliveryDistanceKm * rate) * 100) / 100;
+        if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== expectedPayout) {
+          order.deliveryPayout = expectedPayout;
+          changed = true;
+        }
+        if (changed) {
+          await order.save();
+          updatedCount++;
+        }
+      }
+      console.log(`[Migration] Successfully updated ${updatedCount} orders.`);
+    } catch (migErr) {
+      console.error('[Migration] Failed:', migErr);
+    }
+
     const port = parseInt(env.PORT, 10);
     app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port} [${env.NODE_ENV}]`);

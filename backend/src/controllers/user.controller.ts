@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { Order } from '../models/Order';
 import { Product } from '../models/Product';
 import { createError } from '../middleware/error';
+import { Setting } from '../models/Setting';
 
 export async function getProfile(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
@@ -167,6 +168,32 @@ export async function getCustomers(req: Request, res: Response, next: NextFuncti
 
 export async function getDeliveryPartners(req: Request, res: Response, next: NextFunction) {
   try {
+    // Run dynamic migration for any orders missing delivery distance or payout using updateOne (bypasses validation)
+    try {
+      const missingOrders = await Order.find({
+        $or: [
+          { deliveryDistanceKm: { $exists: false } },
+          { deliveryDistanceKm: null },
+          { deliveryPayout: { $exists: false } },
+          { deliveryPayout: null }
+        ]
+      });
+      if (missingOrders.length > 0) {
+        const rate = await Setting.findOne({ key: 'deliveryRatePerKm' });
+        const rateVal = rate ? rate.value : 15;
+        for (const order of missingOrders) {
+          const distance = order.deliveryDistanceKm ?? 5.0;
+          const payout = Math.round((distance * rateVal) * 100) / 100;
+          await Order.updateOne(
+            { _id: order._id },
+            { $set: { deliveryDistanceKm: distance, deliveryPayout: payout } }
+          );
+        }
+      }
+    } catch (migErr) {
+      console.error('[Migration] Dynamic update in admin failed:', migErr);
+    }
+
     const partners = await User.find({ role: 'delivery_partner' }).sort({ createdAt: -1 }).lean();
 
     // Aggregate delivery stats for all partners
@@ -178,6 +205,15 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
           _id: '$assignedDeliveryPartner',
           completedCount: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
           activeCount: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipped']] }, 1, 0] } },
+          totalEarnings: {
+            $sum: {
+              $cond: [
+                { $eq: ['$status', 'delivered'] },
+                { $ifNull: ['$deliveryPayout', 0] },
+                0
+              ]
+            }
+          }
         },
       },
     ]);
@@ -185,12 +221,11 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
     const statsMap: Record<string, any> = {};
     deliveryStats.forEach(s => { statsMap[s._id.toString()] = s; });
 
-    const earningsPerDelivery = 75;
     const data = partners.map(p => ({
       ...p,
       completedDeliveries: statsMap[p._id.toString()]?.completedCount ?? 0,
       activeDeliveries: statsMap[p._id.toString()]?.activeCount ?? 0,
-      totalEarnings: (statsMap[p._id.toString()]?.completedCount ?? 0) * earningsPerDelivery,
+      totalEarnings: statsMap[p._id.toString()]?.totalEarnings ?? 0,
     }));
 
     res.json({ success: true, data });
@@ -333,5 +368,24 @@ export async function deleteAddress(req: Request & { user?: any }, res: Response
     addr.deleteOne();
     await user.save();
     res.json({ success: true, data: user.addresses });
+  } catch (err) { next(err); }
+}
+
+export async function getDeliveryRate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rate = await Setting.findOne({ key: 'deliveryRatePerKm' });
+    res.json({ success: true, data: rate ? rate.value : 15 }); // default to ₹15/km
+  } catch (err) { next(err); }
+}
+
+export async function updateDeliveryRate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { rate } = z.object({ rate: z.number().min(0) }).parse(req.body);
+    await Setting.findOneAndUpdate(
+      { key: 'deliveryRatePerKm' },
+      { value: rate },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: 'Delivery rate updated successfully', data: rate });
   } catch (err) { next(err); }
 }

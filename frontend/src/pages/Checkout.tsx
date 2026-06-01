@@ -188,25 +188,54 @@ export function Checkout() {
   async function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // Geocode the shipping address for distance check (only for "Saved Address" mode)
-    if (deliverToSameLocation === false && shipping.address) {
-      setCheckingAddress(true);
-      const fullAddress = `${shipping.doorNo ? shipping.doorNo + ', ' : ''}${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
-      const result = await geocodeAndCheckDistance(fullAddress);
-      setShippingAddressDistance(result.distance);
-      setShippingAddressAvailable(result.available);
-      setCheckingAddress(false);
-
-      if (result.available === false) {
-        toast('Delivery is not available to this address. It is beyond our 25 km delivery range.', 'error');
+    // 1. Current GPS Location validation
+    if (deliverToSameLocation === true) {
+      if (distanceFromInventory === null || distanceFromInventory === undefined) {
+        toast('Unable to calculate delivery distance. Please ensure GPS/location permissions are enabled.', 'error');
         return;
       }
-      if (result.available === null) {
-        toast('Could not verify delivery availability for this address. You may proceed at your own risk.', 'warning');
+      if (isDeliveryAvailable === false) {
+        toast(`Your location (${distanceFromInventory} km away) is beyond our 25 km delivery range.`, 'error');
+        return;
       }
     }
 
-    // Save new address to user account if checkbox is checked
+    // 2. Shipping Address validation
+    if (deliverToSameLocation === false) {
+      // If we don't have the distance calculated yet, calculate it now
+      if (shippingAddressDistance === null) {
+        setCheckingAddress(true);
+        const fullAddress = `${shipping.doorNo ? shipping.doorNo + ', ' : ''}${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
+        const result = await geocodeAndCheckDistance(fullAddress);
+        setShippingAddressDistance(result.distance);
+        setShippingAddressAvailable(result.available);
+        setCheckingAddress(false);
+
+        if (result.available === false) {
+          toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
+          return;
+        }
+        if (result.available === null || result.distance === null) {
+          setShippingAddressAvailable(false);
+          toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
+          return;
+        }
+        toast(`Address verified! Distance: ${result.distance} km.`, 'success');
+        return; // Return early so the user sees the verified distance before proceeding
+      }
+
+      // If we already have a calculated distance, verify it's valid and within range
+      if (shippingAddressAvailable === false) {
+        toast(`Delivery is not available to this address (${shippingAddressDistance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
+        return;
+      }
+      if (shippingAddressDistance === null || shippingAddressDistance === undefined) {
+        toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
+        return;
+      }
+    }
+
+    // Save new address to user account if checkbox is checked (only runs if validation succeeded)
     if (addressMode === 'new' && user) {
       const saveCheckbox = document.getElementById('saveNewAddress') as HTMLInputElement;
       if (saveCheckbox?.checked) {
@@ -245,6 +274,14 @@ export function Checkout() {
 
   async function handlePayWithRazorpay() {
     if (!user) { navigate('/auth'); return; }
+
+    const deliveryDist = deliverToSameLocation === true ? distanceFromInventory : shippingAddressDistance;
+    if (deliveryDist === null || deliveryDist === undefined) {
+      toast('Delivery distance has not been calculated. Please verify your address/location.', 'error');
+      setStep('shipping');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -297,6 +334,7 @@ export function Checkout() {
               razorpayOrderId: response.razorpay_order_id,
               scheduledDeliveryDate: selectedDate?.toISOString(),
               scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
+              deliveryDistance: deliveryDist,
               items: items.map(item => ({
                 productId: item.product._id || item.product.id,
                 variantId: item.variant?._id || item.variant?.id,
@@ -336,6 +374,14 @@ export function Checkout() {
   // ── TEST BYPASS: Skip Razorpay, create order directly ──────────────────────
   async function handleTestBypass() {
     if (!user) { navigate('/auth'); return; }
+
+    const deliveryDist = deliverToSameLocation === true ? distanceFromInventory : shippingAddressDistance;
+    if (deliveryDist === null || deliveryDist === undefined) {
+      toast('Delivery distance has not been calculated. Please verify your address/location.', 'error');
+      setStep('shipping');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const orderRes = await orderApi.create({
@@ -355,6 +401,7 @@ export function Checkout() {
         couponCode: coupon?.code ?? '',
         scheduledDeliveryDate: selectedDate?.toISOString(),
         scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
+        deliveryDistance: deliveryDist,
         items: items.map(item => ({
           productId: item.product._id || item.product.id,
           variantId: item.variant?._id || item.variant?.id,
@@ -477,9 +524,12 @@ export function Checkout() {
                       type="button"
                       onClick={() => {
                         setDeliverToSameLocation(true);
-                        if (savedAddresses.length > 0) setAddressMode('saved'); else setAddressMode('new');
+                        setAddressMode(savedAddresses.length > 0 ? 'saved' : 'new');
                         setSelectedAddressId(null);
                         setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
+                        setShippingAddressDistance(null);
+                        setShippingAddressAvailable(null);
+                        requestLocation();
                       }}
                       className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
                         deliverToSameLocation === true
@@ -503,9 +553,11 @@ export function Checkout() {
                       type="button"
                       onClick={() => {
                         setDeliverToSameLocation(false);
-                        if (savedAddresses.length > 0) setAddressMode('saved'); else setAddressMode('new');
+                        setAddressMode(savedAddresses.length > 0 ? 'saved' : 'new');
                         setSelectedAddressId(null);
                         setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
+                        setShippingAddressDistance(null);
+                        setShippingAddressAvailable(null);
                       }}
                       className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
                         deliverToSameLocation === false
@@ -541,7 +593,13 @@ export function Checkout() {
                       {savedAddresses.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => { setAddressMode('saved'); setSelectedAddressId(null); setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' }); }}
+                          onClick={() => {
+                            setAddressMode('saved');
+                            setSelectedAddressId(null);
+                            setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
+                            setShippingAddressDistance(null);
+                            setShippingAddressAvailable(null);
+                          }}
                           className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
                         >
                           <MapPin className="w-3.5 h-3.5" /> Saved Addresses
@@ -550,7 +608,13 @@ export function Checkout() {
                       )}
                       <button
                         type="button"
-                        onClick={() => { setAddressMode('new'); setSelectedAddressId(null); setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' }); }}
+                        onClick={() => {
+                          setAddressMode('new');
+                          setSelectedAddressId(null);
+                          setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
+                          setShippingAddressDistance(null);
+                          setShippingAddressAvailable(null);
+                        }}
                         className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
                       >
                         <Plus className="w-3.5 h-3.5" /> New Address
@@ -566,9 +630,9 @@ export function Checkout() {
                             <button
                               key={addr._id}
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 setSelectedAddressId(addr._id);
-                                setShipping({
+                                const newShipping = {
                                   fullName: addr.fullName || '',
                                   email: addr.email || user?.email || '',
                                   phone: addr.phone || '',
@@ -579,7 +643,31 @@ export function Checkout() {
                                   state: addr.state || '',
                                   zip: addr.postalCode || '',
                                   country: addr.country || 'India',
-                                });
+                                };
+                                setShipping(newShipping);
+
+                                // Auto-calculate distance for this saved address
+                                setCheckingAddress(true);
+                                setShippingAddressDistance(null);
+                                setShippingAddressAvailable(null);
+                                try {
+                                  const fullAddress = `${addr.doorNo ? addr.doorNo + ', ' : ''}${addr.addressLine1}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country || 'India'}`;
+                                  const result = await geocodeAndCheckDistance(fullAddress);
+                                  setShippingAddressDistance(result.distance);
+                                  setShippingAddressAvailable(result.available);
+                                  if (result.available === false) {
+                                    toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
+                                  } else if (result.available === null || result.distance === null) {
+                                    setShippingAddressAvailable(false);
+                                    toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
+                                  } else {
+                                    toast(`Address verified! Distance: ${result.distance} km.`, 'success');
+                                  }
+                                } catch (err) {
+                                  toast('Error checking delivery distance for this address.', 'error');
+                                } finally {
+                                  setCheckingAddress(false);
+                                }
                               }}
                               className={`w-full text-left p-4 border-2 rounded-xl transition-all ${isActive ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
                             >
@@ -642,7 +730,21 @@ export function Checkout() {
                               <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
                                 {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
                               </label>
-                              <input type="text" value={shipping[field.key as keyof ShippingForm] || ''} onChange={e => setShipping(s => ({ ...s, [field.key]: e.target.value }))} placeholder={field.placeholder} required={field.required} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
+                              <input
+                                type="text"
+                                value={shipping[field.key as keyof ShippingForm] || ''}
+                                onChange={e => {
+                                  setShipping(s => ({ ...s, [field.key]: e.target.value }));
+                                  // Reset distance verification status if any address field changes
+                                  if (['doorNo', 'address', 'city', 'state', 'zip', 'country'].includes(field.key)) {
+                                    setShippingAddressDistance(null);
+                                    setShippingAddressAvailable(null);
+                                  }
+                                }}
+                                placeholder={field.placeholder}
+                                required={field.required}
+                                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                              />
                             </div>
                           ))}
                         </div>
@@ -678,11 +780,33 @@ export function Checkout() {
 
                 <button
                   type="submit"
-                  disabled={deliverToSameLocation === null || checkingAddress || (addressMode === 'saved' && !selectedAddressId)}
+                  disabled={
+                    deliverToSameLocation === null ||
+                    checkingAddress ||
+                    (addressMode === 'saved' && !selectedAddressId) ||
+                    (deliverToSameLocation === true && (distanceFromInventory === null || isDeliveryAvailable === false)) ||
+                    (deliverToSameLocation === false && shippingAddressDistance !== null && shippingAddressAvailable === false)
+                  }
                   className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {checkingAddress ? (
-                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Checking availability…</>
+                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Calculating Distance…</>
+                  ) : deliverToSameLocation === true ? (
+                    distanceFromInventory === null ? (
+                      <>Waiting for GPS Location...</>
+                    ) : isDeliveryAvailable === false ? (
+                      <>Out of Delivery Range</>
+                    ) : (
+                      <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
+                    )
+                  ) : deliverToSameLocation === false ? (
+                    shippingAddressDistance === null ? (
+                      <>Calculate Distance & Verify</>
+                    ) : shippingAddressAvailable === false ? (
+                      <>Out of Delivery Range</>
+                    ) : (
+                      <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
+                    )
                   ) : (
                     <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
                   )}

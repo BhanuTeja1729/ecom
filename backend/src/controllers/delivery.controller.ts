@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import mongoose from 'mongoose';
 import { Order } from '../models/Order';
 import { createError } from '../middleware/error';
+import { getSettingValue } from '../models/Setting';
 
 // 1. Get available orders (unassigned orders that are confirmed or processing)
 export async function getAvailableOrders(req: Request, res: Response, next: NextFunction) {
@@ -141,13 +143,51 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
     if (!partnerId) throw createError('Unauthorized access', 401);
 
     const [completedCount, activeCount] = await Promise.all([
-      Order.countDocuments({ assignedDeliveryPartner: partnerId, status: 'delivered' }),
+      // Run dynamic migration for any orders missing delivery distance or payout using updateOne (bypasses validation)
+      (async () => {
+        try {
+          const missingOrders = await Order.find({
+            $or: [
+              { deliveryDistanceKm: { $exists: false } },
+              { deliveryDistanceKm: null },
+              { deliveryPayout: { $exists: false } },
+              { deliveryPayout: null }
+            ]
+          });
+          if (missingOrders.length > 0) {
+            const rate = await getSettingValue('deliveryRatePerKm', 15);
+            for (const order of missingOrders) {
+              const distance = order.deliveryDistanceKm ?? 5.0;
+              const payout = Math.round((distance * rate) * 100) / 100;
+              await Order.updateOne(
+                { _id: order._id },
+                { $set: { deliveryDistanceKm: distance, deliveryPayout: payout } }
+              );
+            }
+          }
+        } catch (migErr) {
+          console.error('[Migration] Dynamic update failed:', migErr);
+        }
+        return Order.countDocuments({ assignedDeliveryPartner: partnerId, status: 'delivered' });
+      })(),
       Order.countDocuments({ assignedDeliveryPartner: partnerId, status: { $in: ['confirmed', 'processing', 'shipped'] } })
     ]);
 
-    // Earnings: ₹75 per completed delivery
-    const earningsPerDelivery = 75;
-    const totalEarnings = completedCount * earningsPerDelivery;
+    // Earnings: sum of completed delivery payouts (with fallback to 0)
+    const partnerMongoId = new mongoose.Types.ObjectId(partnerId);
+    const earningsAggregate = await Order.aggregate([
+      { $match: { assignedDeliveryPartner: partnerMongoId, status: 'delivered' } },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$deliveryPayout', 0] } }
+        }
+      }
+    ]);
+    const totalEarnings = earningsAggregate[0]?.total || 0;
+
+    // Get current rate per km
+    const deliveryRatePerKm = await getSettingValue('deliveryRatePerKm', 15);
 
     res.json({
       success: true,
@@ -155,7 +195,7 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         completedCount,
         activeCount,
         totalEarnings,
-        earningsPerDelivery
+        deliveryRatePerKm
       }
     });
   } catch (err) {
