@@ -5,38 +5,37 @@ import { useRouter } from '../lib/router';
 
 export const FAQS = [
   {
-    category: 'Orders & Shipping',
+    category: 'Orders & Delivery',
     items: [
-      { q: 'How long does shipping take?', a: 'Standard shipping takes 5-7 business days. Express shipping (2-3 business days) is available for ₹149. Overnight shipping is available for ₹299 on orders placed before 2pm.' },
-      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders over ₹999. For orders under ₹999, standard shipping is ₹49.' },
-      { q: 'Can I track my order?', a: 'Absolutely. Once your order ships, you\'ll receive a tracking number via email/SMS. You can also track orders directly on our Order Tracking page or under the Orders tab in your dashboard.' },
-      { q: 'Do you ship internationally?', a: 'We primarily ship across India. For international delivery requests, please reach out to our customer support team to discuss shipping feasibility and rates.' },
-      { q: 'Can I change or cancel my order?', a: 'Orders can be modified or cancelled within 1 hour of placement. After this window, orders enter processing and cannot be changed. Please contact our support team immediately if you need assistance.' },
+      { q: 'How long does delivery take?', a: 'We deliver within 2-4 hours! Under peak traffic or bad weather, it might take a bit longer, but our riders always prioritize fast and safe deliveries.' },
+      { q: 'Do you offer free delivery?', a: 'We offer free delivery on all orders over ₹999. For orders under ₹999, a nominal delivery fee of ₹49 applies depending on your location.' },
+      { q: 'Can I track my order?', a: 'Yes! You can track your order in real-time. Once your order is placed, you can view the live status of the delivery partner on a map under the Orders tab in your dashboard.' },
+      { q: 'Where do you deliver?', a: 'We currently deliver across Jammu in India. Enter your delivery address on checkout or addresses panel to check availability in your locality.' },
+      { q: 'Can I change or cancel my order?', a: 'Because we pack and dispatch orders immediately to meet the 10-minute window, orders can only be cancelled within 60 seconds of placement. After that, they enter the packing phase and cannot be cancelled.' },
     ]
   },
   {
     category: 'Returns & Refunds',
     items: [
-      { q: 'What is your return policy?', a: 'We offer hassle-free 7-day returns on Gadgets and Accessories items in their original condition with tags attached. Simply initiate a return through your account dashboard and we\'ll assist you with the return shipment.' },
-      { q: 'How long do refunds take?', a: 'Once we receive your return, refunds are processed within 2-3 business days. The refund amount will appear on your original payment method within 5-10 business days depending on your bank.' },
-      { q: 'What items cannot be returned?', a: 'The following items are final sale: digital products, personalized/custom items, intimate apparel, and items marked as "Final Sale". Opened beauty or hygiene products can only be returned if defective.' },
-      { q: 'What if my item arrived damaged?', a: 'We\'re so sorry! Please contact us within 48 hours of delivery with photos of the damage. We\'ll immediately ship a replacement at no charge and arrange collection of the damaged item.' },
+      { q: 'What is your return policy?', a: 'We offer instant replacements or returns on perishables and fresh items (groceries, fruits, vegetables, dairy) within 24 hours if the quality is not up to the mark. For packaged non-perishable goods, returns are accepted within 7 days in original condition.' },
+      { q: 'How long do refunds take?', a: 'Refunds are initiated immediately upon cancellation or approval of your return. UPI/Wallet refunds show up within 2-3 business days depending on your bank.' },
+      { q: 'What items cannot be returned?', a: 'For hygiene and safety reasons, once opened, personal care products, baby care essentials, and items marked as "Non-Returnable" cannot be returned unless they are damaged or defective on arrival.' },
     ]
   },
   {
-    category: 'Products & Availability',
+    category: 'Products & Freshness',
     items: [
-      { q: 'Are your products authentic?', a: 'Yes, absolutely. All products sold on BLIPZO are 100% authentic and sourced directly from authorized manufacturers or official distributors. We have zero tolerance for counterfeits.' },
-      { q: 'Will out-of-stock items come back?', a: 'Many popular items are restocked regularly. You can reach out to our support or check back on the product page to see restock schedules.' },
-      { q: 'Do you offer gift wrapping?', a: 'Yes! Premium gift wrapping is available for ₹99 per item. You can add a personalized message during checkout.' },
+      { q: 'How do you ensure the freshness of groceries?', a: 'Our items are stored in temperature-controlled dark stores. Fresh fruits, vegetables, and dairy are sourced daily and quality checked before dispatch by our team.' },
+      { q: 'Are products authentic?', a: 'Yes! All grocery and household items are sourced directly from verified national brands, local authorized distributors, and direct farms.' },
+      { q: 'Do you offer options for organic or premium products?', a: 'Yes! We offer a dedicated organic and premium selection including fresh organic produce, gourmet cheese, imported snacks, and health-focused grocery essentials.' },
     ]
   },
   {
     category: 'Account & Payments',
     items: [
-      { q: 'What payment methods do you accept?', a: 'We accept all major Credit/Debit Cards, UPI (Google Pay, PhonePe, Paytm), Net Banking, and popular digital wallets. All transactions are secured with 256-bit SSL encryption.' },
-      { q: 'Is my payment information secure?', a: 'Yes. We use industry-standard SSL encryption and never store your payment details on our servers. All payments are processed through PCI DSS compliant secure payment gateways.' },
-      { q: 'How do I use a discount code?', a: 'Enter your discount code in the "Promo Code" field in your cart before checkout (e.g. WELCOME10 for 10% off your first order). Codes are case-insensitive.' },
+      { q: 'What payment methods do you accept?', a: 'We accept all UPI payments (GPay, PhonePe, Paytm), Credit/Debit Cards, Net Banking, and simplified Pay Later options at checkout.' },
+      { q: 'Is cash on delivery (COD) available?', a: 'Yes, Cash on Delivery (COD) is available in select locations for orders up to ₹2,000.' },
+      { q: 'How do I use a discount or coupon code?', a: 'You can apply coupon codes (like WELCOME10) directly during checkout under the "Coupons" section in your cart for instant savings.' },
       { q: 'Can I use multiple discount codes?', a: 'Only one discount code can be applied per order. If you have multiple codes, use the one that offers the highest savings for your current order.' },
     ]
   },
