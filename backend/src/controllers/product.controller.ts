@@ -3,6 +3,8 @@ import { z } from 'zod';
 import mongoose from 'mongoose';
 import { Product } from '../models/Product';
 import { Category } from '../models/Category';
+import { Media } from '../models/Media';
+import cloudinary from '../config/cloudinary';
 import { createError } from '../middleware/error';
 import { slugify } from '../utils/helpers';
 
@@ -132,6 +134,16 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
     const data = productSchema.parse(req.body);
     const slug = slugify(data.name) + '-' + Date.now();
     const product = await Product.create({ ...data, slug });
+
+    // Link newly uploaded images to this product in the Media collection
+    if (product.images && product.images.length > 0) {
+      const urls = product.images.map(img => img.url);
+      await Media.updateMany(
+        { url: { $in: urls } },
+        { $set: { associatedType: 'product', associatedId: product._id as mongoose.Types.ObjectId } }
+      );
+    }
+
     res.status(201).json({ success: true, data: product });
   } catch (err) { next(err); }
 }
@@ -141,6 +153,20 @@ export async function updateProduct(req: Request, res: Response, next: NextFunct
     const data = productSchema.partial().parse(req.body);
     const product = await Product.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
     if (!product) throw createError('Product not found', 404);
+
+    // Link newly uploaded images and remove associations for unlinked images
+    if (product.images) {
+      const urls = product.images.map(img => img.url);
+      await Media.updateMany(
+        { url: { $in: urls } },
+        { $set: { associatedType: 'product', associatedId: product._id as mongoose.Types.ObjectId } }
+      );
+      await Media.updateMany(
+        { associatedType: 'product', associatedId: product._id, url: { $nin: urls } },
+        { $unset: { associatedType: '', associatedId: '' } }
+      );
+    }
+
     res.json({ success: true, data: product });
   } catch (err) { next(err); }
 }
@@ -149,6 +175,18 @@ export async function deleteProduct(req: Request, res: Response, next: NextFunct
   try {
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) throw createError('Product not found', 404);
+
+    // Find and delete associated assets from Cloudinary and Media collection
+    const associatedMedia = await Media.find({ associatedType: 'product', associatedId: product._id });
+    for (const media of associatedMedia) {
+      try {
+        await cloudinary.uploader.destroy(media.publicId);
+      } catch (e) {
+        console.error(`Failed to delete Cloudinary asset ${media.publicId}:`, e);
+      }
+    }
+    await Media.deleteMany({ associatedType: 'product', associatedId: product._id });
+
     res.json({ success: true, message: 'Product deleted' });
   } catch (err) { next(err); }
 }

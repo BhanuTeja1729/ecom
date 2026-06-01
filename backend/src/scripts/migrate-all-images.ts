@@ -15,6 +15,7 @@ import * as path from 'path';
 import mongoose  from 'mongoose';
 import { connectDB } from '../config/db';
 import { Category }  from '../models/Category';
+import { slugify } from '../utils/helpers';
 
 // ─── Paths ───────────────────────────────────────────────────────────────────
 const IMG_ROOT    = path.resolve(process.cwd(), '..', 'frontend', 'public', 'img');
@@ -35,37 +36,28 @@ function toDataUri(filePath: string): string {
   return `data:${mimeOf(ext)};base64,${b64}`;
 }
 
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[&]/g, 'and')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 // ─── Top-level category sort order (matches existing seed order) ─────────────
 const ROOT_ORDER: Record<string, number> = {
-  'fruits-and-vegetables':    1,
-  'dairy-bread-and-eggs':     2,
-  'atta-rice-and-dal':        3,
-  'masala-oil-and-more':      4,
-  'snacks-and-munchies':      5,
-  'cold-drinks-and-juices':   6,
-  'tea-coffe-and-health-drink': 7,
-  'tea-coffee-and-health-drink': 7,
-  'breakfast-and-instant-food': 8,
-  'bakery-and-biscuits':      9,
-  'sauces-and-spreads':      10,
-  'chicken-meat-and-fish':   11,
-  'organic-and-healthy-living': 12,
-  'sweet-tooth':             13,
-  'personal-care':           14,
-  'baby-care':               15,
-  'pet-care':                16,
-  'cleaning-essentials':     17,
-  'home-and-office':         18,
-  'pharma-and-wellness':     19,
-  'paan-corner':             20,
+  'fruits-vegetables':        1,
+  'dairy-bread-eggs':         2,
+  'atta-rice-dal':            3,
+  'masala-oil-more':          4,
+  'snacks-munchies':          5,
+  'cold-drinks-juices':       6,
+  'tea-coffee-health-drink':  7,
+  'breakfast-instant-food':   8,
+  'bakery-biscuits':          9,
+  'sauces-spreads':           10,
+  'chicken-meat-fish':        11,
+  'organic-healthy-living':   12,
+  'sweet-tooth':              13,
+  'personal-care':            14,
+  'baby-care':                15,
+  'pet-care':                 16,
+  'cleaning-essentials':      17,
+  'home-office':              18,
+  'pharma-wellness':          19,
+  'paan-corner':              20,
 };
 
 // ─── Main ────────────────────────────────────────────────────────────────────

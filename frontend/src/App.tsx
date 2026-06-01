@@ -5,7 +5,6 @@ import { WishlistProvider } from './contexts/WishlistContext';
 import { LocationProvider } from './contexts/LocationContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { Header } from './components/layout/Header';
-import { Footer } from './components/layout/Footer';
 import { CartDrawer } from './components/layout/CartDrawer';
 import { useAuth } from './contexts/AuthContext';
 import { useEffect, lazy, Suspense } from 'react';
@@ -122,7 +121,6 @@ function AppRouter() {
       <Suspense fallback={<PageLoader />}>
         {renderPage()}
       </Suspense>
-      {showLayout && <Footer />}
     </>
   );
 }

@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
-import { adminApi, orderApi, productApi, categoryApi } from '../lib/api';
+import { adminApi, orderApi, productApi, categoryApi, mediaApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductModal } from '../components/admin/ProductModal';
 
-type Tab = 'overview' | 'orders' | 'products' | 'customers' | 'employees';
+type Tab = 'overview' | 'orders' | 'products' | 'categories' | 'customers' | 'employees';
 
 interface InventoryEdit {
   productId: string;
@@ -392,6 +392,42 @@ export function Admin() {
   const [modalProduct, setModalProduct] = useState<any | null | 'new'>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
+  // Category CRUD states
+  const [modalCategory, setModalCategory] = useState<any | null | 'new'>(undefined);
+  const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<any | null>(null);
+  const [deleteCategoryLoading, setDeleteCategoryLoading] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryFormError, setCategoryFormError] = useState('');
+  const [categoryImageUploading, setCategoryImageUploading] = useState(false);
+
+  const handleCategoryImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!categoryForm.name.trim()) {
+      alert('Please enter the category name before uploading an image.');
+      return;
+    }
+
+    setCategoryImageUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', 'category');
+    formData.append('categoryName', categoryForm.name.trim());
+
+    try {
+      const res = await mediaApi.upload(formData);
+      if (res.success && res.data.url) {
+        setCategoryForm(f => ({ ...f, imageUrl: res.data.url }));
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload category image.');
+    } finally {
+      setCategoryImageUploading(false);
+    }
+  };
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -411,12 +447,14 @@ export function Admin() {
   const { processedData: sortedProducts, FilterHeader: ProductHeader, DropdownHeader: ProductDropdown } = useTableSortAndFilter(products);
   const { processedData: sortedCustomers, FilterHeader: CustomerHeader, DropdownHeader: CustomerDropdown, DateRangeHeader: CustomerDateRange } = useTableSortAndFilter(customers);
   const { processedData: sortedPartners, FilterHeader: PartnerHeader, DropdownHeader: PartnerDropdown } = useTableSortAndFilter(partners);
+  const { processedData: sortedCategories, FilterHeader: CategoryHeader, DropdownHeader: CategoryDropdown } = useTableSortAndFilter(categories);
 
   // Pagination for each table
   const { pageData: ordersPage, PaginationBar: OrdersPagination } = usePagination(sortedOrders, 8);
   const { pageData: productsPage, PaginationBar: ProductsPagination } = usePagination(sortedProducts, 8);
   const { pageData: customersPage, PaginationBar: CustomersPagination } = usePagination(sortedCustomers, 8);
   const { pageData: partnersPage, PaginationBar: PartnersPagination } = usePagination(sortedPartners, 8);
+  const { pageData: categoriesPage, PaginationBar: CategoriesPagination } = usePagination(sortedCategories, 8);
 
   useEffect(() => { if (!loading && !isAdmin) navigate('/'); }, [isAdmin, loading, navigate]);
 
@@ -428,7 +466,7 @@ export function Admin() {
         adminApi.stats(),
         orderApi.list({ all: 'true' }),
         productApi.list({ limit: '50', sort: 'createdAt', order: 'desc' }),
-        categoryApi.list(),
+        categoryApi.list({ all: 'true' }),
       ]);
       setStats(statsRes.data);
       setOrders(ordersRes.data ?? []);
@@ -456,6 +494,60 @@ export function Admin() {
       setProducts(prev => prev.filter(p => p._id !== deleteTarget._id));
       setDeleteTarget(null);
     } catch { /* ignore */ } finally { setDeleteLoading(false); }
+  }
+
+  async function handleSaveCategory(e: React.FormEvent) {
+    e.preventDefault();
+    if (!categoryForm.name.trim()) {
+      setCategoryFormError('Category name is required.');
+      return;
+    }
+    setCategorySaving(true);
+    setCategoryFormError('');
+    try {
+      const payload = {
+        name: categoryForm.name.trim(),
+        description: categoryForm.description.trim() || undefined,
+        imageUrl: categoryForm.imageUrl.trim() || undefined,
+        parent: categoryForm.parent || undefined,
+        sortOrder: Number(categoryForm.sortOrder) || 0,
+        isActive: categoryForm.isActive,
+      };
+
+      if (modalCategory === 'new') {
+        const res = await categoryApi.create(payload);
+        setCategories(prev => [...prev, { ...res.data, productCount: 0 }]);
+      } else {
+        const res = await categoryApi.update(modalCategory._id, payload);
+        let updatedCat = res.data;
+        if (updatedCat.parent) {
+          const parentObj = categories.find(c => c._id === updatedCat.parent);
+          if (parentObj) {
+            updatedCat.parent = { _id: parentObj._id, name: parentObj.name };
+          }
+        }
+        setCategories(prev => prev.map(c => c._id === modalCategory._id ? { ...updatedCat, productCount: c.productCount ?? 0 } : c));
+      }
+      setModalCategory(undefined);
+    } catch (err: any) {
+      setCategoryFormError(err.message || 'Failed to save category');
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function handleDeleteCategory() {
+    if (!deleteCategoryTarget) return;
+    setDeleteCategoryLoading(true);
+    try {
+      await categoryApi.remove(deleteCategoryTarget._id);
+      setCategories(prev => prev.filter(c => c._id !== deleteCategoryTarget._id));
+      setDeleteCategoryTarget(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete category');
+    } finally {
+      setDeleteCategoryLoading(false);
+    }
   }
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -577,6 +669,7 @@ export function Admin() {
     { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'orders', label: `Orders`, icon: Package },
     { id: 'products', label: 'Inventory', icon: ShoppingBag },
+    { id: 'categories', label: 'Categories', icon: FolderOpen },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'employees', label: 'Employees', icon: Truck },
   ] as const;
@@ -634,6 +727,18 @@ export function Admin() {
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
             >
               <Plus className="w-4 h-4" /> Add Product
+            </button>
+          )}
+          {tab === 'categories' && (
+            <button
+              onClick={() => {
+                setModalCategory('new');
+                setCategoryForm({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+                setCategoryFormError('');
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
+            >
+              <Plus className="w-4 h-4" /> Add Category
             </button>
           )}
           {tab === 'employees' && (
@@ -965,6 +1070,15 @@ export function Admin() {
                 <h2 className="font-black text-gray-900">All Customers</h2>
                 <p className="text-xs text-gray-500 mt-0.5">{stats.totalUsers ?? 0} registered customers</p>
               </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search customers..."
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 w-full sm:w-64"
+                />
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1197,6 +1311,113 @@ export function Admin() {
             </div>
           </div>
         )}
+
+        {/* ── Categories ── */}
+        {tab === 'categories' && (
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-black text-gray-900">All Categories</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{categories.length} categories total</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">
+                      <CategoryHeader columnKey="name" title="Category" placeholder="Search name..." />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-44">
+                      <CategoryHeader columnKey="slug" title="Slug" placeholder="Search slug..." />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-56">Description</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">Parent Category</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Sort Order</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Products</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-36">
+                      <CategoryDropdown columnKey="isActive" title="Status" options={[
+                        { label: 'Active', value: '__bool__:true' },
+                        { label: 'Inactive', value: '__bool__:false' },
+                      ]} />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {dataLoading ? (
+                    [1,2,3].map(i => (
+                      <tr key={i}>
+                        {[1,2,3,4,5,6,7,8].map(j => (
+                          <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : categoriesPage.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center text-gray-400 text-sm">No categories found</td>
+                    </tr>
+                  ) : categoriesPage.map((cat: any) => (
+                    <tr key={cat._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                            {cat.imageUrl && <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover" />}
+                          </div>
+                          <span className="font-semibold text-gray-900 text-sm">{cat.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{cat.slug}</td>
+                      <td className="px-4 py-3 text-gray-600 text-xs truncate max-w-[200px]" title={cat.description}>{cat.description || '—'}</td>
+                      <td className="px-4 py-3 text-gray-700 text-xs font-medium">
+                        {cat.parent?.name || cat.parent || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-semibold text-xs">{cat.sortOrder ?? 0}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-lg border border-blue-100">
+                          <ShoppingBag className="w-3 h-3" />{cat.productCount ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={cat.isActive ? 'success' : 'error'}>{cat.isActive ? 'Active' : 'Inactive'}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setModalCategory(cat);
+                              setCategoryForm({
+                                name: cat.name || '',
+                                description: cat.description || '',
+                                imageUrl: cat.imageUrl || '',
+                                parent: cat.parent?._id || cat.parent || '',
+                                sortOrder: cat.sortOrder ?? 0,
+                                isActive: cat.isActive !== false,
+                              });
+                              setCategoryFormError('');
+                            }}
+                            title="Edit category"
+                            className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-amber-400 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteCategoryTarget(cat)}
+                            title="Delete category"
+                            className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <CategoriesPagination />
+          </div>
+        )}
       </div>
 
       {/* ── Product Create/Edit Modal ── */}
@@ -1206,6 +1427,7 @@ export function Admin() {
           categories={categories}
           onSave={handleSaveProduct}
           onClose={() => setModalProduct(undefined)}
+          onAddCategory={(newCat) => setCategories(prev => [...prev, { ...newCat, productCount: 0 }])}
         />
       )}
 
@@ -1331,6 +1553,173 @@ export function Admin() {
               <button onClick={handleDeletePartner} disabled={deletePartnerLoading}
                 className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                 {deletePartnerLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Category Create/Edit Modal ── */}
+      {modalCategory !== undefined && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5 shrink-0">
+              <h3 className="text-lg font-black text-gray-900">
+                {modalCategory === 'new' ? 'Add New Category' : 'Edit Category'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setModalCategory(undefined)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCategory} className="space-y-4 overflow-y-auto flex-1 pr-1">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={categoryForm.name}
+                  onChange={e => setCategoryForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g. Headphones"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Description</label>
+                <textarea
+                  rows={2}
+                  value={categoryForm.description}
+                  onChange={e => setCategoryForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Category description..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Category Image</label>
+                <div className="flex gap-3 items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="w-14 h-14 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {categoryForm.imageUrl ? (
+                      <img src={categoryForm.imageUrl} alt="Category" className="w-full h-full object-cover" />
+                    ) : categoryImageUploading ? (
+                      <Loader className="w-5 h-5 text-amber-500 animate-spin" />
+                    ) : (
+                      <Upload className="w-5 h-5 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={categoryForm.imageUrl}
+                      placeholder="Upload category image file"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white cursor-not-allowed text-gray-500"
+                    />
+                    <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      Upload File
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleCategoryImageChange}
+                        disabled={categoryImageUploading}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Parent Category</label>
+                <select
+                  value={categoryForm.parent}
+                  onChange={e => setCategoryForm(f => ({ ...f, parent: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="">— No parent (Top-Level) —</option>
+                  {categories
+                    .filter(c => modalCategory === 'new' || c._id !== modalCategory._id)
+                    .map((c: any) => (
+                      <option key={c._id} value={c._id}>{c.name}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Sort Order</label>
+                <input
+                  type="number"
+                  value={categoryForm.sortOrder}
+                  onChange={e => setCategoryForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                />
+              </div>
+              <div className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                <div
+                  onClick={() => setCategoryForm(f => ({ ...f, isActive: !f.isActive }))}
+                  className={`w-10 h-5 rounded-full transition-colors ${categoryForm.isActive ? 'bg-amber-500' : 'bg-gray-200'} relative cursor-pointer`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${categoryForm.isActive ? 'left-5' : 'left-0.5'}`} />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Active</span>
+              </div>
+              {categoryFormError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {categoryFormError}
+                </div>
+              )}
+              <div className="flex gap-3 pt-2 shrink-0">
+                <button
+                  type="submit"
+                  disabled={categorySaving}
+                  className="flex-1 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {categorySaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {modalCategory === 'new' ? 'Create Category' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalCategory(undefined)}
+                  className="px-6 py-3 border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Category Confirmation ── */}
+      {deleteCategoryTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 text-center mb-1">Delete Category?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              Category <span className="font-semibold text-gray-700">{deleteCategoryTarget.name}</span> will be permanently removed.
+              {(deleteCategoryTarget.productCount ?? 0) > 0 && (
+                <span className="block text-xs text-red-500 font-semibold mt-1">
+                  Warning: There are {deleteCategoryTarget.productCount} products associated with this category.
+                </span>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteCategoryTarget(null)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteCategory}
+                disabled={deleteCategoryLoading}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {deleteCategoryLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 Delete
               </button>
             </div>

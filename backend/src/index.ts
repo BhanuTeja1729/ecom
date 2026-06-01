@@ -21,6 +21,7 @@ import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
 import paymentRoutes from './routes/payment.routes';
 import deliveryRoutes from './routes/delivery.routes';
+import mediaRoutes from './routes/media.routes';
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
 app.use(`${BASE}/payment`, paymentRoutes);
 app.use(`${BASE}/delivery`, deliveryRoutes);
+app.use(`${BASE}/media`, mediaRoutes);
 
 // ─── Serve Frontend (production) ────────────────────────────────────────────
 const frontendDist = path.join(__dirname, '../../frontend/dist');

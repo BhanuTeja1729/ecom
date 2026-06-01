@@ -117,8 +117,14 @@ export const productApi = {
 
 // ─── Categories ──────────────────────────────────────────────────────────────
 export const categoryApi = {
-  list: () => api.get<{ success: boolean; data: any[] }>('/categories'),
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return api.get<{ success: boolean; data: any[] }>(`/categories${qs}`);
+  },
   get: (slug: string) => api.get<{ success: boolean; data: any }>(`/categories/${slug}`),
+  create: (body: any) => api.post<{ success: boolean; data: any }>('/categories', body),
+  update: (id: string, body: any) => api.put<{ success: boolean; data: any }>(`/categories/${id}`, body),
+  remove: (id: string) => api.delete<{ success: boolean }>(`/categories/${id}`),
 };
 
 // ─── Cart ────────────────────────────────────────────────────────────────────
@@ -194,6 +200,30 @@ export const deliveryApi = {
     api.put<{ success: boolean; data: any }>(`/delivery/orders/${id}/status`, { status, message }),
   getStats: () =>
     api.get<{ success: boolean; data: any }>('/delivery/stats'),
+};
+
+// ─── Media ───────────────────────────────────────────────────────────────────
+export const mediaApi = {
+  upload: async (formData: FormData) => {
+    const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}/media/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
+
+    return res.json() as Promise<{ success: boolean; data: { url: string; publicId: string } }>;
+  },
+  remove: (publicId: string) => api.post<{ success: boolean }>('/media/delete', { publicId }),
 };
 
 export interface UserData {

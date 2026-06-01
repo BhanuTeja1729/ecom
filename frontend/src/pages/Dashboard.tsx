@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut, Truck, Plus, Pencil, Trash2, Home, Building2, X } from 'lucide-react';
+import { Package, Heart, User, MapPin, Bell, ShoppingBag, ChevronRight, LogOut, Truck, Plus, Pencil, Trash2, Home, Building2, X, HelpCircle, Search, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useToast } from '../contexts/ToastContext';
@@ -7,8 +7,9 @@ import { useRouter } from '../lib/router';
 import { orderApi, userApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductCard } from '../components/ui/ProductCard';
+import { FAQS } from './FAQ';
 
-type Tab = 'overview' | 'orders' | 'wishlist' | 'profile' | 'addresses';
+type Tab = 'overview' | 'orders' | 'wishlist' | 'profile' | 'addresses' | 'faq';
 
 const ORDER_STATUS_BADGE: Record<string, { variant: 'default'|'success'|'warning'|'error'|'dark'; label: string }> = {
   pending: { variant: 'warning', label: 'Pending' },
@@ -40,6 +41,8 @@ export function Dashboard() {
     city: '', state: '', postalCode: '', country: 'India',
   });
   const [savingAddress, setSavingAddress] = useState(false);
+  const [faqSearch, setFaqSearch] = useState('');
+  const [openFaqItems, setOpenFaqItems] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user) { navigate('/auth'); return; }
@@ -80,7 +83,15 @@ export function Dashboard() {
     { id: 'wishlist', label: `Wishlist (${wishlistIds.length})`, icon: Heart },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'addresses', label: 'Addresses', icon: MapPin },
+    { id: 'faq', label: 'FAQ', icon: HelpCircle },
   ] as const;
+
+  const filteredFaqs = FAQS.map(cat => ({
+    ...cat,
+    items: cat.items.filter(item =>
+      !faqSearch || item.q.toLowerCase().includes(faqSearch.toLowerCase()) || item.a.toLowerCase().includes(faqSearch.toLowerCase())
+    ),
+  })).filter(cat => cat.items.length > 0);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -408,6 +419,68 @@ export function Dashboard() {
                               <Trash2 className="w-3.5 h-3.5 text-gray-500" />
                             </button>
                           </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {tab === 'faq' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <h2 className="text-xl font-black text-gray-900">Frequently Asked Questions</h2>
+                  <div className="w-full sm:w-64 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
+                    <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search FAQ..."
+                      value={faqSearch}
+                      onChange={e => setFaqSearch(e.target.value)}
+                      className="flex-1 bg-transparent text-sm outline-none text-gray-800 placeholder-gray-400"
+                    />
+                  </div>
+                </div>
+
+                {filteredFaqs.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-500">
+                    No matching questions found.
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {filteredFaqs.map(cat => (
+                      <div key={cat.category} className="space-y-3">
+                        <h3 className="font-bold text-gray-950 border-b border-gray-100 pb-2 text-sm uppercase tracking-wider">{cat.category}</h3>
+                        <div className="space-y-2">
+                          {cat.items.map((item, i) => {
+                            const key = `${cat.category}-${i}`;
+                            const isOpen = openFaqItems.has(key);
+                            return (
+                              <div key={key} className={`bg-white rounded-xl border transition-all ${isOpen ? 'border-amber-200 shadow-sm' : 'border-gray-200'}`}>
+                                <button
+                                  onClick={() => {
+                                    setOpenFaqItems(prev => {
+                                      const next = new Set(prev);
+                                      if (next.has(key)) next.delete(key);
+                                      else next.add(key);
+                                      return next;
+                                    });
+                                  }}
+                                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-gray-900 text-sm"
+                                >
+                                  <span>{item.q}</span>
+                                  <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {isOpen && (
+                                  <div className="px-5 pb-4">
+                                    <div className="border-t border-gray-100 pt-3 text-sm text-gray-600 leading-relaxed">
+                                      {item.a}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}

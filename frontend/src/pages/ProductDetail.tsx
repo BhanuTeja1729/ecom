@@ -67,7 +67,7 @@ export function ProductDetail({ slug }: { slug: string }) {
             <div className="space-y-4">
               <div className="aspect-square bg-gray-200 rounded-2xl" />
               <div className="flex gap-3">
-                {[1,2,3].map(i => <div key={i} className="w-20 h-20 bg-gray-200 rounded-xl" />)}
+                {[1, 2, 3].map(i => <div key={i} className="w-20 h-20 bg-gray-200 rounded-xl" />)}
               </div>
             </div>
             <div className="space-y-4">
@@ -115,7 +115,7 @@ export function ProductDetail({ slug }: { slug: string }) {
   const wishlisted = isWishlisted(productId);
   const categoryInfo = product.category;
 
-  const ratingDistribution = [5,4,3,2,1].map(r => ({
+  const ratingDistribution = [5, 4, 3, 2, 1].map(r => ({
     rating: r,
     count: reviews.filter((rev: any) => rev.rating === r).length,
     pct: reviews.length ? (reviews.filter((rev: any) => rev.rating === r).length / reviews.length) * 100 : 0,
@@ -330,11 +330,10 @@ export function ProductDetail({ slug }: { slug: string }) {
             </div>
 
             {/* Trust */}
-            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
               {[
                 { icon: Shield, text: 'Secure Payment' },
                 { icon: Truck, text: 'Free Shipping ₹999+' },
-                { icon: RotateCcw, text: '30-Day Returns' },
               ].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex flex-col items-center gap-1.5 text-center">
                   <Icon className="w-5 h-5 text-amber-500" />
@@ -447,7 +446,6 @@ export function ProductDetail({ slug }: { slug: string }) {
                 { title: 'Express Shipping', desc: '₹149. Delivered in 2-3 business days.' },
                 { title: 'Overnight Shipping', desc: '₹299. Order by 2pm for next business day delivery.' },
                 { title: 'COD Available', desc: 'Cash on Delivery available across 25,000+ pin codes across India.' },
-                { title: 'Returns Policy', desc: 'Free 30-day returns on all orders. Items must be in original condition with tags attached.' },
               ].map(({ title, desc }) => (
                 <div key={title} className="flex gap-4">
                   <Truck className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />

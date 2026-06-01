@@ -2,13 +2,6 @@ import { Instagram, Twitter, Facebook, Youtube, Mail, Phone, MapPin, Zap } from 
 import { Link } from '../../lib/router';
 
 const LINKS = {
-  Shop: [
-    { label: 'All Products', href: '/shop' },
-    { label: 'Electronics', href: '/category/electronics' },
-    { label: 'Apparel', href: '/category/apparel' },
-    { label: 'Home & Living', href: '/category/home-living' },
-    { label: 'Sports & Fitness', href: '/category/sports-fitness' },
-  ],
   Support: [
     { label: 'FAQ', href: '/faq' },
     { label: 'Contact Us', href: '/about#contact' },
@@ -60,7 +53,7 @@ export function Footer() {
           {Object.entries(LINKS).map(([title, links]) => (
             <div key={title}>
               <h4 className="text-white font-bold text-sm uppercase tracking-wider mb-5">{title}</h4>
-              <ul className="space-y-3">
+              <ul className="space-y-2">
                 {links.map(link => (
                   <li key={`${link.href}-${link.label}`}>
                     <Link
@@ -74,33 +67,6 @@ export function Footer() {
               </ul>
             </div>
           ))}
-        </div>
-
-        {/* Social + Newsletter */}
-        <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            {[
-              { Icon: Instagram, href: '#' },
-              { Icon: Twitter, href: '#' },
-              { Icon: Facebook, href: '#' },
-              { Icon: Youtube, href: '#' },
-            ].map(({ Icon, href }, i) => (
-              <a
-                key={i}
-                href={href}
-                className="w-9 h-9 flex items-center justify-center rounded-lg bg-gray-800 text-gray-400 hover:bg-amber-500 hover:text-white transition-all"
-              >
-                <Icon className="w-4 h-4" />
-              </a>
-            ))}
-          </div>
-          <div className="flex items-center gap-6 flex-wrap justify-center">
-            <img src="https://images.pexels.com/photos/164501/pexels-photo-164501.jpeg?auto=compress&cs=tinysrgb&w=60&h=30&fit=crop" alt="Visa" className="h-6 rounded opacity-60" />
-            <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2 py-1 rounded">VISA</span>
-            <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2 py-1 rounded">MC</span>
-            <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2 py-1 rounded">AMEX</span>
-            <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2 py-1 rounded">PayPal</span>
-          </div>
         </div>
       </div>
 

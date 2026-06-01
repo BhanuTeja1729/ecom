@@ -1,41 +1,42 @@
+
 import { useState } from 'react';
 import { ChevronDown, Search } from 'lucide-react';
 import { useRouter } from '../lib/router';
 
-const FAQS = [
+export const FAQS = [
   {
     category: 'Orders & Shipping',
     items: [
-      { q: 'How long does shipping take?', a: 'Standard shipping takes 5-7 business days. Express shipping (2-3 days) is available for $14.99. Overnight shipping is available for $29.99 on orders placed before 2pm EST.' },
-      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders over $75. For orders under $75, standard shipping is $5.99.' },
-      { q: 'Can I track my order?', a: 'Absolutely. Once your order ships, you\'ll receive a tracking number via email. You can also track orders directly on our Order Tracking page using your order number.' },
-      { q: 'Do you ship internationally?', a: 'We ship to 50+ countries worldwide. International shipping rates are calculated at checkout based on destination and order weight. Delivery typically takes 7-14 business days.' },
+      { q: 'How long does shipping take?', a: 'Standard shipping takes 5-7 business days. Express shipping (2-3 business days) is available for ₹149. Overnight shipping is available for ₹299 on orders placed before 2pm.' },
+      { q: 'Do you offer free shipping?', a: 'Yes! We offer free standard shipping on all orders over ₹999. For orders under ₹999, standard shipping is ₹49.' },
+      { q: 'Can I track my order?', a: 'Absolutely. Once your order ships, you\'ll receive a tracking number via email/SMS. You can also track orders directly on our Order Tracking page or under the Orders tab in your dashboard.' },
+      { q: 'Do you ship internationally?', a: 'We primarily ship across India. For international delivery requests, please reach out to our customer support team to discuss shipping feasibility and rates.' },
       { q: 'Can I change or cancel my order?', a: 'Orders can be modified or cancelled within 1 hour of placement. After this window, orders enter processing and cannot be changed. Please contact our support team immediately if you need assistance.' },
     ]
   },
   {
     category: 'Returns & Refunds',
     items: [
-      { q: 'What is your return policy?', a: 'We offer hassle-free 30-day returns on all items in their original condition with tags attached. Simply initiate a return through your account dashboard and we\'ll provide a prepaid shipping label.' },
-      { q: 'How long do refunds take?', a: 'Once we receive your return, refunds are processed within 2-3 business days. The amount will appear on your original payment method within 5-10 business days depending on your bank.' },
-      { q: 'What items cannot be returned?', a: 'The following items are final sale: digital products, personalized/custom items, intimate apparel, and items marked as "Final Sale". Opened beauty products can only be returned if defective.' },
+      { q: 'What is your return policy?', a: 'We offer hassle-free 30-day returns on all items in their original condition with tags attached. Simply initiate a return through your account dashboard and we\'ll assist you with the return shipment.' },
+      { q: 'How long do refunds take?', a: 'Once we receive your return, refunds are processed within 2-3 business days. The refund amount will appear on your original payment method within 5-10 business days depending on your bank.' },
+      { q: 'What items cannot be returned?', a: 'The following items are final sale: digital products, personalized/custom items, intimate apparel, and items marked as "Final Sale". Opened beauty or hygiene products can only be returned if defective.' },
       { q: 'What if my item arrived damaged?', a: 'We\'re so sorry! Please contact us within 48 hours of delivery with photos of the damage. We\'ll immediately ship a replacement at no charge and arrange collection of the damaged item.' },
     ]
   },
   {
     category: 'Products & Availability',
     items: [
-      { q: 'Are your products authentic?', a: 'Yes, absolutely. All products sold on BLIPZO are 100% authentic and purchased directly from authorized manufacturers or official distributors. We have zero tolerance for counterfeits.' },
-      { q: 'Will out-of-stock items come back?', a: 'Many popular items are restocked regularly. Use the "Notify Me" feature on out-of-stock product pages to receive an email when the item becomes available again.' },
-      { q: 'Do you offer gift wrapping?', a: 'Yes! Premium gift wrapping is available for $5.99 per item. You can add a personalized message and we\'ll include it with beautiful tissue paper and a ribbon.' },
+      { q: 'Are your products authentic?', a: 'Yes, absolutely. All products sold on BLIPZO are 100% authentic and sourced directly from authorized manufacturers or official distributors. We have zero tolerance for counterfeits.' },
+      { q: 'Will out-of-stock items come back?', a: 'Many popular items are restocked regularly. You can reach out to our support or check back on the product page to see restock schedules.' },
+      { q: 'Do you offer gift wrapping?', a: 'Yes! Premium gift wrapping is available for ₹99 per item. You can add a personalized message during checkout.' },
     ]
   },
   {
     category: 'Account & Payments',
     items: [
-      { q: 'What payment methods do you accept?', a: 'We accept all major credit cards (Visa, Mastercard, American Express), PayPal, Apple Pay, and Google Pay. All transactions are secured with 256-bit SSL encryption.' },
-      { q: 'Is my payment information secure?', a: 'Yes. We use industry-standard SSL encryption and never store your payment details on our servers. All payments are processed through PCI DSS compliant payment gateways.' },
-      { q: 'How do I use a discount code?', a: 'Enter your discount code in the "Promo Code" field in your cart before checkout. Codes are case-insensitive and one code can be used per order. Check the expiration date and minimum order requirement.' },
+      { q: 'What payment methods do you accept?', a: 'We accept all major Credit/Debit Cards, UPI (Google Pay, PhonePe, Paytm), Net Banking, and popular digital wallets. All transactions are secured with 256-bit SSL encryption.' },
+      { q: 'Is my payment information secure?', a: 'Yes. We use industry-standard SSL encryption and never store your payment details on our servers. All payments are processed through PCI DSS compliant secure payment gateways.' },
+      { q: 'How do I use a discount code?', a: 'Enter your discount code in the "Promo Code" field in your cart before checkout (e.g. WELCOME10 for 10% off your first order). Codes are case-insensitive.' },
       { q: 'Can I use multiple discount codes?', a: 'Only one discount code can be applied per order. If you have multiple codes, use the one that offers the highest savings for your current order.' },
     ]
   },

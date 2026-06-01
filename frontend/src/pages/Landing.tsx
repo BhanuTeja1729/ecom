@@ -2,6 +2,7 @@ import { ArrowRight, Shield, Truck, RotateCcw, Star, Zap, ShoppingBag, Package, 
 import { useRouter } from '../lib/router';
 import { useAuth } from '../contexts/AuthContext';
 import { useEffect } from 'react';
+import { Footer } from '../components/layout/Footer';
 
 const FEATURES = [
   {
@@ -304,23 +305,7 @@ export function Landing() {
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer className="bg-gray-950 py-10 border-t border-white/5">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-amber-500 rounded-lg flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5 text-white fill-white" />
-            </div>
-            <span className="text-white font-black tracking-tight">BLIPZO</span>
-          </div>
-          <p className="text-gray-500 text-sm">© 2026 BLIPZO Innovations Pvt. Ltd. All rights reserved.</p>
-          <div className="flex gap-4 text-sm text-gray-500">
-            <button onClick={() => navigate('/privacy')} className="hover:text-gray-300 transition-colors">Privacy</button>
-            <button onClick={() => navigate('/terms')} className="hover:text-gray-300 transition-colors">Terms</button>
-            <button onClick={() => navigate('/about#contact')} className="hover:text-gray-300 transition-colors">Contact</button>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
     </div>
   );

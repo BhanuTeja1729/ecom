@@ -14,9 +14,18 @@ import { User }     from '../models/User';
 import { Category } from '../models/Category';
 import { Product }  from '../models/Product';
 import { Coupon }   from '../models/Coupon';
+import { slugify }  from '../utils/helpers';
 
 // ─── Image helper ────────────────────────────────────────────────────────────
 const IMG_DIR = path.resolve(process.cwd(), '..', 'frontend', 'public', 'img');
+const CAT_SUB_DIR = path.join(IMG_DIR, 'category');
+const SUPPORTED = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+
+function mimeOf(ext: string): string {
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  return 'image/png';
+}
 
 function toDataUri(filename: string): string {
   const full = path.join(IMG_DIR, filename);
@@ -27,6 +36,36 @@ function toDataUri(filename: string): string {
   const b64 = fs.readFileSync(full).toString('base64');
   return `data:image/png;base64,${b64}`;
 }
+
+function toDataUriFromFilePath(filePath: string): string {
+  if (!fs.existsSync(filePath)) return '';
+  const ext = path.extname(filePath).toLowerCase();
+  const b64 = fs.readFileSync(filePath).toString('base64');
+  return `data:${mimeOf(ext)};base64,${b64}`;
+}
+
+const ROOT_ORDER: Record<string, number> = {
+  'fruits-vegetables':        1,
+  'dairy-bread-eggs':         2,
+  'atta-rice-dal':            3,
+  'masala-oil-more':          4,
+  'snacks-munchies':          5,
+  'cold-drinks-juices':       6,
+  'tea-coffee-health-drink':  7,
+  'breakfast-instant-food':   8,
+  'bakery-biscuits':          9,
+  'sauces-spreads':           10,
+  'chicken-meat-fish':        11,
+  'organic-healthy-living':   12,
+  'sweet-tooth':              13,
+  'personal-care':            14,
+  'baby-care':                15,
+  'pet-care':                 16,
+  'cleaning-essentials':      17,
+  'home-office':              18,
+  'pharma-wellness':          19,
+  'paan-corner':              20,
+};
 
 // ─── Categories  (exactly matching /public/img filenames) ────────────────────
 const CATEGORIES = [
@@ -59,7 +98,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Fresh Organic Bananas',
     slug: 'fresh-organic-bananas',
-    categorySlug: 'fruits-vegetables',
+    categorySlug: 'fruits-vegetables-fresh-fruits',
     description: 'A bunch of 6 fresh organic bananas, rich in potassium and natural energy.',
     shortDescription: 'Bunch of 6 organic bananas',
     price: 49, comparePrice: 65, sku: 'FV-001', inventory: 200,
@@ -70,7 +109,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Red Fresh Tomatoes',
     slug: 'red-fresh-tomatoes',
-    categorySlug: 'fruits-vegetables',
+    categorySlug: 'fruits-vegetables-fresh-vegetables',
     description: 'Farm-fresh red tomatoes, perfect for curries, salads, and chutneys.',
     shortDescription: '500g pack of fresh tomatoes',
     price: 35, comparePrice: 50, sku: 'FV-002', inventory: 150,
@@ -83,7 +122,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Amul Full Cream Milk',
     slug: 'amul-full-cream-milk',
-    categorySlug: 'dairy-bread-eggs',
+    categorySlug: 'dairy-bread-eggs-milk',
     description: 'Pasteurised and homogenised full cream milk from Amul. 1 litre pack.',
     shortDescription: '1 Litre full cream milk',
     price: 68, sku: 'DB-001', inventory: 300,
@@ -94,7 +133,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Farm Fresh Eggs',
     slug: 'farm-fresh-eggs',
-    categorySlug: 'dairy-bread-eggs',
+    categorySlug: 'dairy-bread-eggs-eggs',
     description: 'Free-range farm-fresh eggs. High in protein and essential nutrients. Pack of 12.',
     shortDescription: 'Pack of 12 free-range eggs',
     price: 89, comparePrice: 99, sku: 'DB-002', inventory: 250,
@@ -107,7 +146,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Aashirvaad Whole Wheat Atta',
     slug: 'aashirvaad-whole-wheat-atta',
-    categorySlug: 'atta-rice-dal',
+    categorySlug: 'atta-rice-dal-atta',
     description: 'Made from the finest whole wheat grains. Rich in fibre and ideal for soft rotis.',
     shortDescription: '5 kg whole wheat flour',
     price: 289, comparePrice: 320, sku: 'AR-001', inventory: 180,
@@ -118,7 +157,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'India Gate Basmati Rice',
     slug: 'india-gate-basmati-rice',
-    categorySlug: 'atta-rice-dal',
+    categorySlug: 'atta-rice-dal-rice',
     description: 'Premium aged basmati rice with long grains and a rich aroma. 5 kg pack.',
     shortDescription: '5 kg premium basmati rice',
     price: 499, comparePrice: 560, sku: 'AR-002', inventory: 120,
@@ -131,7 +170,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: "Lay's Classic Salted Chips",
     slug: 'lays-classic-salted-chips',
-    categorySlug: 'snacks-munchies',
+    categorySlug: 'snacks-munchies-chips-crisps',
     description: 'Crispy and light classic salted potato chips. The perfect any-time snack. 55g pack.',
     shortDescription: 'Classic salted potato chips 55g',
     price: 20, comparePrice: 25, sku: 'SN-001', inventory: 500,
@@ -144,7 +183,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Real Fruit Juice Mixed Fruit',
     slug: 'real-fruit-juice-mixed-fruit',
-    categorySlug: 'cold-drinks-juices',
+    categorySlug: 'cold-drinks-juices-fruit-juices',
     description: 'Dabur Real mixed fruit juice — no added sugar. 1 litre pack.',
     shortDescription: '1L mixed fruit juice, no added sugar',
     price: 115, comparePrice: 130, sku: 'CD-001', inventory: 200,
@@ -157,7 +196,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Tata Tea Premium',
     slug: 'tata-tea-premium',
-    categorySlug: 'tea-coffee-health-drink',
+    categorySlug: 'tea-coffee-health-drink-tea',
     description: 'A rich, strong cup of tea with every brew. Tata Tea Premium 500g pack.',
     shortDescription: '500g premium blend tea',
     price: 225, comparePrice: 250, sku: 'TC-001', inventory: 300,
@@ -170,7 +209,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Britannia Good Day Butter Cookies',
     slug: 'britannia-good-day-butter-cookies',
-    categorySlug: 'bakery-biscuits',
+    categorySlug: 'bakery-biscuits-cookies',
     description: 'Buttery, crisp and delicious cookies with a rich aroma. 200g pack.',
     shortDescription: 'Butter cookies 200g',
     price: 35, comparePrice: 40, sku: 'BB-001', inventory: 400,
@@ -183,7 +222,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Cadbury Dairy Milk Silk',
     slug: 'cadbury-dairy-milk-silk',
-    categorySlug: 'sweet-tooth',
+    categorySlug: 'sweet-tooth-chocolates',
     description: 'Smooth, creamy and indulgent milk chocolate. Cadbury Dairy Milk Silk 150g.',
     shortDescription: 'Silky smooth milk chocolate 150g',
     price: 175, comparePrice: 195, sku: 'SW-001', inventory: 250,
@@ -196,7 +235,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Dove Moisturising Body Wash',
     slug: 'dove-moisturising-body-wash',
-    categorySlug: 'personal-care',
+    categorySlug: 'personal-care-shower-gels-scrubs',
     description: 'Gentle, creamy body wash that moisturises your skin as you shower. 500ml.',
     shortDescription: 'Moisturising body wash 500ml',
     price: 349, comparePrice: 399, sku: 'PC-001', inventory: 180,
@@ -209,7 +248,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'Revital H Multivitamin',
     slug: 'revital-h-multivitamin',
-    categorySlug: 'pharma-wellness',
+    categorySlug: 'pharma-wellness-vitamins-daily-nutrition',
     description: 'Complete multivitamin and mineral supplement for energy, immunity and vitality. 30 capsules.',
     shortDescription: '30 capsules multivitamin supplement',
     price: 299, comparePrice: 350, sku: 'PW-001', inventory: 120,
@@ -222,7 +261,7 @@ const SAMPLE_PRODUCTS = [
   {
     name: 'MDH Garam Masala',
     slug: 'mdh-garam-masala',
-    categorySlug: 'masala-oil-more',
+    categorySlug: 'masala-oil-more-powdered-spices',
     description: 'Authentic blend of spices for a rich, aromatic flavour in every dish. 100g pack.',
     shortDescription: 'Aromatic garam masala blend 100g',
     price: 75, comparePrice: 90, sku: 'MO-001', inventory: 350,
@@ -257,25 +296,92 @@ async function seed() {
 
     // ── Categories with base64 images ──
     console.log('📂 Loading category images from:', IMG_DIR);
-    const categoryDocs = await Category.insertMany(
-      CATEGORIES.map(c => ({
-        name:        c.name,
-        slug:        c.slug,
-        description: c.description,
-        sortOrder:   c.sortOrder,
-        imageUrl:    toDataUri(c.file),
-        isActive:    true,
-      }))
-    );
-    console.log(`✅ Created ${categoryDocs.length} categories\n`);
 
-    // Build slug → _id map
+    // 1. Root-level PNGs → top-level categories
+    const rootFiles = fs.readdirSync(IMG_DIR).filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return SUPPORTED.has(ext) && fs.statSync(path.join(IMG_DIR, f)).isFile();
+    });
+
+    const categoryDocs = [];
+
+    for (const [i, file] of rootFiles.entries()) {
+      const fullPath  = path.join(IMG_DIR, file);
+      const nameNoExt = path.basename(file, path.extname(file));
+      const slug      = slugify(nameNoExt);
+      const imageUrl  = toDataUriFromFilePath(fullPath);
+      const order     = ROOT_ORDER[slug] ?? (100 + i);
+
+      const doc = await Category.create({
+        name: nameNoExt,
+        slug,
+        imageUrl,
+        sortOrder: order,
+        isActive: true
+      });
+      categoryDocs.push(doc);
+    }
+    console.log(`✅ Created ${categoryDocs.length} top-level categories`);
+
+    // 2. Subcategory images → child categories
+    let subcategoryCount = 0;
+    if (fs.existsSync(CAT_SUB_DIR)) {
+      const parentFolders = fs.readdirSync(CAT_SUB_DIR).filter(d =>
+        fs.statSync(path.join(CAT_SUB_DIR, d)).isDirectory()
+      );
+
+      for (const parentName of parentFolders) {
+        const parentSlug = slugify(parentName);
+        let parentDoc = await Category.findOne({ slug: parentSlug });
+        if (!parentDoc) {
+          parentDoc = await Category.create({
+            name: parentName,
+            slug: parentSlug,
+            sortOrder: 99,
+            isActive: true
+          });
+          categoryDocs.push(parentDoc);
+        }
+        const parentId = parentDoc._id;
+
+        const subDir = path.join(CAT_SUB_DIR, parentName);
+        const subFiles = fs.readdirSync(subDir).filter(f => {
+          const ext = path.extname(f).toLowerCase();
+          return SUPPORTED.has(ext) && fs.statSync(path.join(subDir, f)).isFile();
+        });
+
+        for (const [idx, file] of subFiles.entries()) {
+          const fullPath  = path.join(subDir, file);
+          const nameNoExt = path.basename(file, path.extname(file));
+          const slug      = slugify(`${parentSlug}-${nameNoExt}`);
+          const imageUrl  = toDataUriFromFilePath(fullPath);
+
+          const doc = await Category.create({
+            name:      nameNoExt,
+            slug,
+            imageUrl,
+            parent:    parentId as mongoose.Types.ObjectId,
+            sortOrder: idx + 1,
+            isActive:  true,
+          });
+          categoryDocs.push(doc);
+          subcategoryCount++;
+        }
+      }
+    }
+    console.log(`✅ Created ${subcategoryCount} subcategories\n`);
+
+    // Build slug → _id map for all categories (parents & subcategories)
     const catMap = new Map(categoryDocs.map(c => [c.slug, c._id]));
 
     // ── Products ──
     const productDocs = SAMPLE_PRODUCTS.map(p => {
       const { categorySlug, ...rest } = p;
-      return { ...rest, category: catMap.get(categorySlug) };
+      const categoryId = catMap.get(categorySlug);
+      if (!categoryId) {
+        console.warn(`  ⚠️ Category slug not found for product "${p.name}": ${categorySlug}`);
+      }
+      return { ...rest, category: categoryId };
     });
     const created = await Product.insertMany(productDocs);
     console.log(`📦 Created ${created.length} products\n`);
