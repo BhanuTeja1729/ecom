@@ -72,32 +72,32 @@ export function About() {
             <span className="text-xl font-black text-gray-900 tracking-tight">BLIPZO</span>
           </div>
           <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-center gap-6 mr-2">
+            <div className="flex items-center gap-6 mr-2">
               <button
                 onClick={() => navigate('/about')}
                 className="text-sm font-semibold text-amber-600 transition-colors"
               >
                 About
               </button>
-              <a
+              {/* <a
                 href="#contact"
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Contact
-              </a>
+              </a> */}
             </div>
             <div className="flex items-center gap-3">
-              <button
+              {/* <button
                 onClick={() => navigate('/auth')}
                 className="px-4 py-2 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Sign In
-              </button>
+              </button> */}
               <button
                 onClick={() => navigate('/auth')}
                 className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
               >
-                Get Started
+                Sign In
               </button>
             </div>
           </div>

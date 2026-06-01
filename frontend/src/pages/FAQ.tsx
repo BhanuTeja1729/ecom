@@ -17,7 +17,7 @@ export const FAQS = [
   {
     category: 'Returns & Refunds',
     items: [
-      { q: 'What is your return policy?', a: 'We offer hassle-free 30-day returns on all items in their original condition with tags attached. Simply initiate a return through your account dashboard and we\'ll assist you with the return shipment.' },
+      { q: 'What is your return policy?', a: 'We offer hassle-free 7-day returns on Gadgets and Accessories items in their original condition with tags attached. Simply initiate a return through your account dashboard and we\'ll assist you with the return shipment.' },
       { q: 'How long do refunds take?', a: 'Once we receive your return, refunds are processed within 2-3 business days. The refund amount will appear on your original payment method within 5-10 business days depending on your bank.' },
       { q: 'What items cannot be returned?', a: 'The following items are final sale: digital products, personalized/custom items, intimate apparel, and items marked as "Final Sale". Opened beauty or hygiene products can only be returned if defective.' },
       { q: 'What if my item arrived damaged?', a: 'We\'re so sorry! Please contact us within 48 hours of delivery with photos of the damage. We\'ll immediately ship a replacement at no charge and arrange collection of the damaged item.' },

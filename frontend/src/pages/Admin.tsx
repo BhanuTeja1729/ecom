@@ -692,8 +692,17 @@ export function Admin() {
         </div>
 
         {/* ── Tab Navigation Bar (like image) ── */}
-        <div className="flex items-center justify-between border-b border-gray-200 mb-6">
-          <nav className="flex items-center gap-0 -mb-px">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 mb-6 gap-3 pb-2 sm:pb-0">
+          <style>{`
+            .no-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+            .no-scrollbar {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `}</style>
+          <nav className="flex items-center gap-0 -mb-px overflow-x-auto no-scrollbar w-full sm:w-auto scroll-smooth">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -721,39 +730,41 @@ export function Admin() {
           </nav>
 
           {/* Right-side action button */}
-          {tab === 'products' && (
-            <button
-              onClick={() => setModalProduct('new')}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <Plus className="w-4 h-4" /> Add Product
-            </button>
-          )}
-          {tab === 'categories' && (
-            <button
-              onClick={() => {
-                setModalCategory('new');
-                setCategoryForm({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
-                setCategoryFormError('');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <Plus className="w-4 h-4" /> Add Category
-            </button>
-          )}
-          {tab === 'employees' && (
-            <button
-              onClick={() => {
-                setEditingPartner(null);
-                setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
-                setPartnerFormError('');
-                setShowPartnerForm(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <UserPlus className="w-4 h-4" /> Add Partner
-            </button>
-          )}
+          <div className="flex-shrink-0 flex items-center mb-1">
+            {tab === 'products' && (
+              <button
+                onClick={() => setModalProduct('new')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" /> Add Product
+              </button>
+            )}
+            {tab === 'categories' && (
+              <button
+                onClick={() => {
+                  setModalCategory('new');
+                  setCategoryForm({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+                  setCategoryFormError('');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" /> Add Category
+              </button>
+            )}
+            {tab === 'employees' && (
+              <button
+                onClick={() => {
+                  setEditingPartner(null);
+                  setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
+                  setPartnerFormError('');
+                  setShowPartnerForm(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <UserPlus className="w-4 h-4" /> Add Partner
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Overview ── */}

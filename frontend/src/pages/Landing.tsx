@@ -23,8 +23,8 @@ const FEATURES = [
   },
   {
     icon: RotateCcw,
-    title: '30-Day Returns',
-    desc: 'Not happy? Return anything within 30 days, no questions asked.',
+    title: '7-Day Returns',
+    desc: 'Not happy? Return anything within 7 days, no questions asked.',
     color: 'from-purple-500 to-violet-600',
     bg: 'bg-purple-50',
     text: 'text-purple-600',
@@ -47,14 +47,18 @@ const STATS = [
 ];
 
 const TESTIMONIALS = [
-  { name: 'Priya M.', text: 'Absolutely love the quality! Orders arrive fast and everything looks premium.', rating: 5, avatar: 'PM' },
+  { name: 'Priya M.', text: 'Absolutely love the quality! Orders arrive fast throughout Jammu and everything looks premium.', rating: 5, avatar: 'PM' },
   { name: 'Rahul S.', text: 'Best shopping experience I\'ve had online. The product range is incredible.', rating: 5, avatar: 'RS' },
   { name: 'Ananya K.', text: 'Customer support is fantastic. Returns are so easy. Highly recommend!', rating: 5, avatar: 'AK' },
+  { name: 'Vishal K.', text: 'Excellent quality and timely delivery. Since starting in 2026, Blipzo has become my go-to for premium products.', rating: 5, avatar: 'VK' },
+  { name: 'Sanchit S.', text: 'Premium products and fast delivery. The customer service is top-notch!', rating: 5, avatar: 'SS' },
+  { name: 'Saksham M.', text: 'Great collection of premium products with excellent customer service. Highly recommended!', rating: 5, avatar: 'SM' },
 ];
 
 export function Landing() {
   const { navigate } = useRouter();
   const { user, loading } = useAuth();
+
 
   // Wait until auth finishes loading, then redirect if already logged in
   useEffect(() => {
@@ -86,32 +90,32 @@ export function Landing() {
             <span className="text-xl font-black text-gray-900 tracking-tight">BLIPZO</span>
           </div>
           <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-center gap-6 mr-2">
+            <div className="flex items-center gap-6 mr-2">
               <button
                 onClick={() => navigate('/about')}
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 About
               </button>
-              <button
+              {/* <button
                 onClick={() => navigate('/about#contact')}
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Contact
-              </button>
+              </button> */}
             </div>
             <div className="flex items-center gap-3">
-              <button
+              {/* <button
                 onClick={() => navigate('/auth')}
                 className="px-4 py-2 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Sign In
-              </button>
+              </button> */}
               <button
                 onClick={() => navigate('/auth')}
                 className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
               >
-                Get Started
+                Sign In
               </button>
             </div>
           </div>
@@ -257,25 +261,79 @@ export function Landing() {
       </section>
 
       {/* ── Testimonials ── */}
-      <section className="py-24 bg-white">
+      <section className="py-24 bg-white relative overflow-hidden">
+        <style>{`
+          @keyframes marquee {
+            0% {
+              transform: translateX(0);
+            }
+            100% {
+              transform: translateX(-100%);
+            }
+          }
+          .animate-marquee {
+            display: flex;
+            flex-shrink: 0;
+            gap: 1.5rem;
+            padding-right: 1.5rem;
+            animation: marquee 35s linear infinite;
+          }
+          .marquee-container:hover .animate-marquee {
+            animation-play-state: paused;
+          }
+        `}</style>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black text-gray-900 mb-4">What Our Customers Say</h2>
             <p className="text-gray-500 text-lg">Real reviews from real shoppers.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map(({ name, text, avatar }) => (
-              <div key={name} className="bg-gray-50 rounded-3xl p-8 border border-gray-100">
-                <div className="flex text-amber-400 mb-4">★★★★★</div>
-                <p className="text-gray-700 leading-relaxed mb-6 text-sm">"{text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-black">
-                    {avatar}
+
+          <div className="relative w-full overflow-hidden flex marquee-container py-4">
+            <div className="animate-marquee">
+              {TESTIMONIALS.map(({ name, text, avatar }) => (
+                <div
+                  key={name}
+                  className="w-[300px] sm:w-[380px] flex-shrink-0 bg-gradient-to-tr from-gray-50 to-white rounded-3xl p-8 border border-gray-100 hover:border-amber-200/50 hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex text-amber-400 mb-4">★★★★★</div>
+                    <p className="text-gray-700 leading-relaxed mb-6 text-sm italic">"{text}"</p>
                   </div>
-                  <p className="font-bold text-gray-900">{name}</p>
+                  <div className="flex items-center gap-3 mt-auto">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-black shadow-md shadow-amber-500/25">
+                      {avatar}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">{name}</p>
+                      <p className="text-gray-400 text-xs font-medium">Verified Buyer</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            <div className="animate-marquee" aria-hidden="true">
+              {TESTIMONIALS.map(({ name, text, avatar }, index) => (
+                <div
+                  key={`${name}-dup-${index}`}
+                  className="w-[300px] sm:w-[380px] flex-shrink-0 bg-gradient-to-tr from-gray-50 to-white rounded-3xl p-8 border border-gray-100 hover:border-amber-200/50 hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex text-amber-400 mb-4">★★★★★</div>
+                    <p className="text-gray-700 leading-relaxed mb-6 text-sm italic">"{text}"</p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-auto">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white text-xs font-black shadow-md shadow-amber-500/25">
+                      {avatar}
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900">{name}</p>
+                      <p className="text-gray-400 text-xs font-medium">Verified Buyer</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -298,7 +356,7 @@ export function Landing() {
             onClick={() => navigate('/auth')}
             className="group inline-flex items-center gap-3 px-10 py-5 bg-amber-500 text-white font-black rounded-2xl text-lg hover:bg-amber-400 transition-all shadow-2xl shadow-amber-500/30"
           >
-            Create Free Account
+            Create Account
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
           <p className="text-gray-500 text-sm mt-4">No credit card required. Join 50,000+ happy customers.</p>

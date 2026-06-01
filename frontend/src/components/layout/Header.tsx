@@ -147,7 +147,7 @@ export function Header() {
               {searchOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setSearchOpen(false)} />
-                  <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 overflow-hidden z-50">
+                  <div className="fixed inset-x-4 top-16 lg:absolute lg:left-auto lg:right-0 lg:top-12 lg:w-80 bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 overflow-hidden z-50">
                     <div className="flex items-center gap-2 p-3 border-b border-gray-100">
                       <Search className="w-4 h-4 text-gray-400" />
                       <input
@@ -283,34 +283,52 @@ export function Header() {
       {mobileOpen && (
         <div className="lg:hidden bg-white border-t border-gray-100 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-1">
-            {user?.role !== 'delivery_partner' && (
-              <>
-                <button onClick={() => { navigate('/shop'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">All Products</button>
-                {categories.map(cat => (
-                  <button key={cat.id} onClick={() => { navigate(`/category/${cat.slug}`); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-xl">
-                    {cat.name}
-                  </button>
-                ))}
-                <hr className="border-gray-100" />
-                {NAV_LINKS.slice(1).map(link => (
-                  <button key={link.href} onClick={() => { navigate(link.href); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">
-                    {link.label}
-                  </button>
-                ))}
-              </>
-            )}
             {user ? (
               <>
                 {user.role === 'delivery_partner' ? (
-                  <button onClick={() => { navigate('/delivery'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl">Delivery Portal</button>
+                  <button
+                    onClick={() => { navigate('/delivery'); setMobileOpen(false); }}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl"
+                  >
+                    Delivery Portal
+                  </button>
                 ) : (
-                  <button onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl">Dashboard</button>
+                  <>
+                    <button
+                      onClick={() => { navigate('/dashboard'); setMobileOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl"
+                    >
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={() => { navigate('/order-tracking'); setMobileOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 rounded-xl"
+                    >
+                      Order Tracking
+                    </button>
+                  </>
                 )}
-                {isAdmin && <button onClick={() => { navigate('/admin'); setMobileOpen(false); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl">Admin Panel</button>}
-                <button onClick={() => { setMobileOpen(false); signOut(); }} className="w-full text-left px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl">Sign Out</button>
+                {isAdmin && (
+                  <button
+                    onClick={() => { navigate('/admin'); setMobileOpen(false); }}
+                    className="w-full text-left px-4 py-3 text-sm font-semibold text-amber-600 hover:bg-amber-50 rounded-xl"
+                  >
+                    Admin Panel
+                  </button>
+                )}
+                <hr className="border-gray-100 my-2" />
+                <button
+                  onClick={() => { setMobileOpen(false); signOut(); }}
+                  className="w-full text-left px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-xl"
+                >
+                  Sign Out
+                </button>
               </>
             ) : (
-              <button onClick={() => { navigate('/auth'); setMobileOpen(false); }} className="w-full px-4 py-3 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors">
+              <button
+                onClick={() => { navigate('/auth'); setMobileOpen(false); }}
+                className="w-full px-4 py-3 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors text-center block"
+              >
                 Sign In / Register
               </button>
             )}

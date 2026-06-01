@@ -91,6 +91,8 @@ export const authApi = {
     api.post<{ success: boolean; message: string }>('/auth/forgot-password', { email }),
   resetPassword: (body: { token: string; password: string }) =>
     api.post<{ success: boolean; message: string }>('/auth/reset-password', body),
+  updatePassword: (body: { currentPassword?: string; newPassword: string }) =>
+    api.put<{ success: boolean; message: string }>('/auth/update-password', body),
 };
 
 // ─── Products ────────────────────────────────────────────────────────────────

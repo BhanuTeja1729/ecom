@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { orderApi, userApi } from '../lib/api';
+import { orderApi, userApi, authApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductCard } from '../components/ui/ProductCard';
 import { FAQS } from './FAQ';
@@ -21,7 +21,7 @@ const ORDER_STATUS_BADGE: Record<string, { variant: 'default'|'success'|'warning
 };
 
 export function Dashboard() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const { items: wishlistIds } = useWishlist();
   const { toast } = useToast();
   const { navigate } = useRouter();
@@ -31,6 +31,8 @@ export function Dashboard() {
   const [loading, setLoading] = useState(false);
   const [profileForm, setProfileForm] = useState({ fullName: '', phone: '' });
   const [saving, setSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -68,9 +70,38 @@ export function Dashboard() {
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
-    try { await userApi.updateProfile(profileForm); toast('Profile updated!', 'success'); }
+    try {
+      await userApi.updateProfile(profileForm);
+      await refreshUser();
+      toast('Profile updated!', 'success');
+    }
     catch (err: any) { toast(err.message || 'Failed to save', 'error'); }
     finally { setSaving(false); }
+  }
+
+  async function handleUpdatePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast('New passwords do not match', 'error');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      toast('New password must be at least 6 characters', 'error');
+      return;
+    }
+    setUpdatingPassword(true);
+    try {
+      await authApi.updatePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      toast('Password updated successfully!', 'success');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      toast(err.message || 'Failed to update password', 'error');
+    } finally {
+      setUpdatingPassword(false);
+    }
   }
 
   if (!user) return null;
@@ -243,26 +274,69 @@ export function Dashboard() {
             )}
 
             {tab === 'profile' && (
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h2 className="text-xl font-black text-gray-900 mb-6">Profile Information</h2>
-                <form onSubmit={handleSaveProfile} className="space-y-4 max-w-lg">
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name</label>
-                    <input type="text" value={profileForm.fullName} onChange={e => setProfileForm(f => ({ ...f, fullName: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500" />
+              <div className="space-y-6">
+                <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                  <h2 className="text-xl font-black text-gray-900 mb-6">Profile Information</h2>
+                  <form onSubmit={handleSaveProfile} className="space-y-4 max-w-lg">
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name</label>
+                      <input type="text" value={profileForm.fullName} onChange={e => setProfileForm(f => ({ ...f, fullName: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email</label>
+                      <input type="email" value={user.email} disabled className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 bg-gray-50" />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Phone</label>
+                      <input type="tel" value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500" />
+                    </div>
+                    <p className="text-xs font-semibold text-amber-600">Role: {user.role ?? 'customer'}</p>
+                    <button type="submit" disabled={saving} className="px-6 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60">
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </form>
+                </div>
+
+                {!user.auth0Id && !user.googleId && (
+                  <div className="bg-white rounded-2xl border border-gray-200 p-6">
+                    <h2 className="text-xl font-black text-gray-900 mb-6">Update Password</h2>
+                    <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-lg">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Current Password</label>
+                        <input
+                          type="password"
+                          value={passwordForm.currentPassword}
+                          onChange={e => setPasswordForm(f => ({ ...f, currentPassword: e.target.value }))}
+                          required
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">New Password</label>
+                        <input
+                          type="password"
+                          value={passwordForm.newPassword}
+                          onChange={e => setPasswordForm(f => ({ ...f, newPassword: e.target.value }))}
+                          required
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Confirm New Password</label>
+                        <input
+                          type="password"
+                          value={passwordForm.confirmPassword}
+                          onChange={e => setPasswordForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                          required
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <button type="submit" disabled={updatingPassword} className="px-6 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60">
+                        {updatingPassword ? 'Updating...' : 'Update Password'}
+                      </button>
+                    </form>
                   </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email</label>
-                    <input type="email" value={user.email} disabled className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 bg-gray-50" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Phone</label>
-                    <input type="tel" value={profileForm.phone} onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500" />
-                  </div>
-                  <p className="text-xs font-semibold text-amber-600">Role: {user.role ?? 'customer'}</p>
-                  <button type="submit" disabled={saving} className="px-6 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60">
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </form>
+                )}
               </div>
             )}
 

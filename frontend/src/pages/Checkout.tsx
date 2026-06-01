@@ -385,17 +385,19 @@ export function Checkout() {
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Progress */}
-        <div className="flex items-center justify-center mb-12">
+        <div className="flex items-center justify-center mb-12 w-full max-w-xl mx-auto px-2">
           {steps.map((s, i) => (
-            <div key={s.id} className="flex items-center">
-              <div className="flex items-center gap-2">
+            <div key={s.id} className="flex-1 flex items-center relative">
+              <div className="flex flex-col items-center gap-1.5 flex-1 relative z-10">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${i < stepIndex ? 'bg-emerald-500 text-white' : i === stepIndex ? 'bg-gray-900 text-white' : 'bg-gray-200 text-gray-500'}`}>
                   {i < stepIndex ? <Check className="w-4 h-4" /> : i + 1}
                 </div>
-                <span className={`text-sm font-semibold ${i === stepIndex ? 'text-gray-900' : 'text-gray-400'}`}>{s.label}</span>
+                <span className={`text-xs sm:text-sm font-semibold text-center ${i === stepIndex ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {s.label}
+                </span>
               </div>
               {i < steps.length - 1 && (
-                <div className={`w-16 h-0.5 mx-3 ${i < stepIndex ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                <div className={`absolute top-4 left-[calc(50%+1rem)] right-[calc(-50%+1rem)] h-0.5 -translate-y-1/2 z-0 ${i < stepIndex ? 'bg-emerald-500' : 'bg-gray-200'}`} />
               )}
             </div>
           ))}
