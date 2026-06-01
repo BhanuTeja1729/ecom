@@ -349,7 +349,7 @@ export function DeliveryDashboard() {
                             </div>
                             <div className="flex flex-col sm:text-right">
                               <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Estimated Pay</span>
-                              <span className="text-lg font-black text-emerald-600">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                              <span className="text-lg font-black text-emerald-600">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
                               {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
                                 <span className="text-[10px] text-gray-400 font-normal">({order.deliveryDistanceKm} km)</span>
                               )}
@@ -539,7 +539,7 @@ export function DeliveryDashboard() {
                         <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
                           <div className="text-left md:text-right">
                             <span className="text-[10px] text-gray-400 font-bold block uppercase">Est. Payout</span>
-                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
                             {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
                               <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
                             )}
@@ -596,7 +596,7 @@ export function DeliveryDashboard() {
                         </div>
                         <div className="text-left md:text-right shrink-0">
                           <span className="text-[10px] text-gray-400 font-bold block uppercase">Earned</span>
-                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm) * (stats.deliveryRatePerKm)))}</span>
+                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
                           {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
                             <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
                           )}
