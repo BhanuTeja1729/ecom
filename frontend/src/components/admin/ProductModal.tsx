@@ -255,7 +255,7 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
             </div>
             <div>
               <label className={label}>SKU</label>
-              <input className={input} value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="ELEC-001" />
+              <input className={input} value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="ABC-123" />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">

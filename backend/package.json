@@ -11,6 +11,7 @@
     "upload:images": "ts-node src/scripts/upload-images.ts",
     "migrate:all-images": "ts-node src/scripts/migrate-all-images.ts",
     "update-payouts": "ts-node src/scripts/updatePayouts.ts",
+    "migrate:skus": "ts-node src/scripts/migrate-skus.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

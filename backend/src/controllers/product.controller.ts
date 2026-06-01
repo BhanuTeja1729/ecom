@@ -152,8 +152,11 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
 export async function updateProduct(req: Request, res: Response, next: NextFunction) {
   try {
     const data = productSchema.partial().parse(req.body);
-    const product = await Product.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+    const product = await Product.findById(req.params.id);
     if (!product) throw createError('Product not found', 404);
+
+    Object.assign(product, data);
+    await product.save();
 
     // Link newly uploaded images and remove associations for unlinked images
     if (product.images) {

@@ -383,7 +383,12 @@ async function seed() {
       }
       return { ...rest, category: categoryId };
     });
-    const created = await Product.insertMany(productDocs);
+    
+    const created = [];
+    for (const doc of productDocs) {
+      const prod = await Product.create(doc);
+      created.push(prod);
+    }
     console.log(`📦 Created ${created.length} products\n`);
 
     // ── Coupons ──
