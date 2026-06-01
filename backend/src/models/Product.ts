@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { Category as CategoryModel } from './Category';
 
 export interface IProductVariant {
   name: string;
@@ -150,7 +151,6 @@ function generateCategoryPrefix(categoryName: string, existingPrefixes: Set<stri
 }
 
 async function getOrCreateCategoryPrefix(categoryId: mongoose.Types.ObjectId): Promise<string> {
-  const CategoryModel = mongoose.model('Category');
   const category = await CategoryModel.findById(categoryId);
   if (!category) return 'GEN';
 
