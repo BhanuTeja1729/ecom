@@ -7,6 +7,8 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (email: string, password: string, loginRole?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string, role?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
+  sendOtp: (email: string, fullName: string, password: string, role?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
+  verifyOtp: (email: string, otp: string, fullName: string, password: string, role?: 'customer' | 'delivery_partner') => Promise<{ error: string | null }>;
   signInWithAuth0: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -96,6 +98,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function sendOtp(email: string, fullName: string, password: string, role?: 'customer' | 'delivery_partner') {
+    try {
+      await authApi.sendOtp({ email, fullName, password, role });
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'Failed to send verification code' };
+    }
+  }
+
+  async function verifyOtp(email: string, otp: string, fullName: string, password: string, role?: 'customer' | 'delivery_partner') {
+    try {
+      const res = await authApi.verifyOtp({ email, otp, fullName, password, role });
+      setAccessToken(res.data.accessToken);
+      const userData = res.data.user;
+      setUser({ ...userData, id: (userData as any)._id || userData.id });
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'Verification failed' };
+    }
+  }
+
+
   async function signInWithAuth0() {
     await loginWithRedirect();
   }
@@ -137,6 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signIn,
       signUp,
+      sendOtp,
+      verifyOtp,
       signInWithAuth0,
       signInWithGoogle,
       signOut,

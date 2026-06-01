@@ -16,6 +16,7 @@ const ROUTES = [
   '/checkout',
   '/cart',
   '/auth',
+  '/reset-password',
   '/order-tracking',
   '/about',
   '/faq',

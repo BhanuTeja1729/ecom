@@ -75,6 +75,10 @@ export const api = {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 export const authApi = {
+  sendOtp: (body: { fullName: string; email: string; password: string; role?: 'customer' | 'delivery_partner' }) =>
+    api.post<{ success: boolean; message: string }>('/auth/send-otp', body),
+  verifyOtp: (body: { email: string; otp: string; fullName: string; password: string; role?: 'customer' | 'delivery_partner' }) =>
+    api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/verify-otp', body),
   register: (body: { fullName: string; email: string; password: string; role?: 'customer' | 'delivery_partner' }) =>
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/register', body),
   login: (body: { email: string; password: string; loginRole?: 'customer' | 'delivery_partner' }) =>
@@ -83,6 +87,10 @@ export const authApi = {
     api.post<{ success: boolean; data: { accessToken: string; user: UserData } }>('/auth/auth0', { accessToken }),
   logout: () => api.post('/auth/logout'),
   me: () => api.get<{ success: boolean; data: UserData }>('/auth/me'),
+  forgotPassword: (email: string) =>
+    api.post<{ success: boolean; message: string }>('/auth/forgot-password', { email }),
+  resetPassword: (body: { token: string; password: string }) =>
+    api.post<{ success: boolean; message: string }>('/auth/reset-password', body),
 };
 
 // ─── Products ────────────────────────────────────────────────────────────────

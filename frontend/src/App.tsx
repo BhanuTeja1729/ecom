@@ -17,6 +17,7 @@ const ProductDetail = lazy(() => import('./pages/ProductDetail').then(m => ({ de
 const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
 const Checkout = lazy(() => import('./pages/Checkout').then(m => ({ default: m.Checkout })));
 const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
+const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
@@ -35,7 +36,7 @@ function PageLoader() {
 }
 
 // Routes that skip the shared Header/Footer (have their own layout)
-const NO_LAYOUT_PATHS = ['/auth', '/', '/about'];
+const NO_LAYOUT_PATHS = ['/auth', '/reset-password', '/', '/about'];
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -87,12 +88,13 @@ function CustomerRoute({ children }: { children: React.ReactNode }) {
 function AppRouter() {
   const { path, params, navigate } = useRouter();
 
-  const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth');
+  const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth') && !path.startsWith('/reset-password');
 
   function renderPage() {
     // Public routes
     if (path === '/') return <Landing />;
     if (path === '/auth') return <Auth />;
+    if (path === '/reset-password') return <ResetPassword />;
     if (path === '/contact') { navigate('/about'); return <PageLoader />; }
     if (path === '/about') return <About />;
     if (path === '/faq') return <FAQ />;

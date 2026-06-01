@@ -32,6 +32,8 @@ export interface IUser extends Document {
   addresses: IAddress[];
   wishlist: mongoose.Types.ObjectId[];
   refreshTokens: string[];
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -67,6 +69,8 @@ const UserSchema = new Schema<IUser>({
   addresses: [AddressSchema],
   wishlist: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
   refreshTokens: [String],
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {
