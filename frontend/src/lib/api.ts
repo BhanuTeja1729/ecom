@@ -116,6 +116,8 @@ export const productApi = {
     api.delete<{ success: boolean }>(`/products/${productId}`),
   updateInventory: (productId: string, inventory: number, lowStockThreshold?: number) =>
     api.patch<{ success: boolean; data: any }>(`/products/${productId}/inventory`, { inventory, lowStockThreshold }),
+  bulkUpdateInventory: (updates: { sku: string; inventory: number; lowStockThreshold?: number }[]) =>
+    api.post<{ success: boolean; results: { sku: string; success: boolean; error?: string }[] }>('/products/bulk-inventory', updates),
 };
 
 // ─── Categories ──────────────────────────────────────────────────────────────

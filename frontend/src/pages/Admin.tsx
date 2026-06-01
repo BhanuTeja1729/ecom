@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload, Tag } from 'lucide-react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload, Tag, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { useToast } from '../contexts/ToastContext';
@@ -395,6 +395,7 @@ export function Admin() {
   const [editing, setEditing] = useState<Record<string, InventoryEdit>>({});
   const [modalProduct, setModalProduct] = useState<any | null | 'new'>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [showImportModal, setShowImportModal] = useState<boolean>(false);
 
   // Category CRUD states
   const [modalCategory, setModalCategory] = useState<any | null | 'new'>(undefined);
@@ -830,12 +831,20 @@ export function Admin() {
           {/* Right-side action button */}
           <div className="flex-shrink-0 flex items-center mb-1">
             {tab === 'products' && (
-              <button
-                onClick={() => setModalProduct('new')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
-              >
-                <Plus className="w-4 h-4" /> Add Product
-              </button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm font-bold rounded-xl hover:bg-gray-50 transition-colors w-full sm:w-auto justify-center"
+                >
+                  <Upload className="w-4 h-4" /> Import Stock
+                </button>
+                <button
+                  onClick={() => setModalProduct('new')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+                >
+                  <Plus className="w-4 h-4" /> Add Product
+                </button>
+              </div>
             )}
             {tab === 'categories' && (
               <button
@@ -2129,6 +2138,362 @@ export function Admin() {
           </div>
         </div>
       )}
+
+      {showImportModal && (
+        <ImportInventoryModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={loadData}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ImportInventoryModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModalProps) {
+  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [error, setError] = useState<string>('');
+  const [importing, setImporting] = useState<boolean>(false);
+  const [success, setSuccess] = useState<boolean>(false);
+  const [dragActive, setDragActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if ((window as any).XLSX) return;
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  const downloadTemplate = () => {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert('Excel library is still loading. Please wait a moment.');
+      return;
+    }
+    
+    const data = [
+      ['SKU', 'Stock', 'Threshold'],
+      ['FRU-001', 150, 10],
+      ['DAI-001', 80, 5],
+      ['ATT-001', 200, 15]
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Template');
+    XLSX.writeFile(workbook, 'inventory_import_template.xlsx');
+  };
+
+  const processFile = (file: File) => {
+    setError('');
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const XLSX = (window as any).XLSX;
+        if (!XLSX) {
+          setError('Excel library is still loading. Please try again in 2 seconds.');
+          return;
+        }
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+        if (rows.length < 2) {
+          setError('The uploaded file appears to be empty or contains no records.');
+          return;
+        }
+
+        // Normalize headers
+        const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase());
+        const skuIdx = headers.findIndex(h => h.includes('sku'));
+        const stockIdx = headers.findIndex(h => h.includes('stock') || h.includes('inventory') || h === 'qty' || h.includes('quantity'));
+        const thresholdIdx = headers.findIndex(h => h.includes('threshold') || h.includes('alert') || h.includes('limit'));
+
+        if (skuIdx === -1) {
+          setError('Could not find a column containing "SKU" in the header row.');
+          return;
+        }
+        if (stockIdx === -1) {
+          setError('Could not find a column containing "Stock", "Inventory", or "Qty" in the header row.');
+          return;
+        }
+
+        const parsed: any[] = [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0) continue;
+
+          const sku = String(row[skuIdx] || '').trim().toUpperCase();
+          const rawStock = row[stockIdx];
+          const inventory = parseInt(String(rawStock), 10);
+
+          if (!sku && rawStock === undefined) continue;
+
+          const item: any = { sku, inventory };
+
+          if (thresholdIdx !== -1) {
+            const rawThr = row[thresholdIdx];
+            if (rawThr !== undefined && rawThr !== null && String(rawThr).trim() !== '') {
+              const thr = parseInt(String(rawThr), 10);
+              if (!isNaN(thr)) {
+                item.lowStockThreshold = thr;
+              }
+            }
+          }
+
+          // Validation
+          const skuRegex = /^[A-Z]{3}-\d{3}$/;
+          if (!sku) {
+            item.status = 'invalid';
+            item.error = 'Missing SKU';
+          } else if (!skuRegex.test(sku)) {
+            item.status = 'invalid';
+            item.error = 'Invalid SKU format (expected AAA-000)';
+          } else if (isNaN(inventory) || inventory < 0) {
+            item.status = 'invalid';
+            item.error = 'Stock must be a non-negative integer';
+          } else {
+            item.status = 'valid';
+          }
+
+          parsed.push(item);
+        }
+
+        if (parsed.length === 0) {
+          setError('No valid rows found in the sheet.');
+        } else {
+          setParsedData(parsed);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Error parsing file.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleImport = async () => {
+    const validUpdates = parsedData.filter(d => d.status === 'valid');
+    if (validUpdates.length === 0) {
+      setError('No valid rows to import.');
+      return;
+    }
+
+    setImporting(true);
+    setError('');
+    try {
+      const res = await productApi.bulkUpdateInventory(validUpdates.map(u => ({
+        sku: u.sku,
+        inventory: u.inventory,
+        lowStockThreshold: u.lowStockThreshold
+      })));
+
+      if (res.success) {
+        const resultsMap = new Map(res.results.map((r: any) => [r.sku, r]));
+        const updatedData = parsedData.map(item => {
+          const resItem = resultsMap.get(item.sku);
+          if (resItem) {
+            if (resItem.success) {
+              return { ...item, status: 'success' };
+            } else {
+              return { ...item, status: 'failed', error: resItem.error || 'Update failed' };
+            }
+          }
+          return item;
+        });
+
+        setParsedData(updatedData);
+        setSuccess(true);
+        onSuccess();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Import request failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const validCount = parsedData.filter(d => d.status === 'valid' || d.status === 'success').length;
+  const invalidCount = parsedData.filter(d => d.status === 'invalid' || d.status === 'failed').length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-black text-gray-900">Import Inventory</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Upload a CSV, XLSX, or XLS file matching SKU and Stock values</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+          
+          {parsedData.length === 0 ? (
+            /* Upload box */
+            <div
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${
+                dragActive ? 'border-amber-500 bg-amber-50/30' : 'border-gray-200 hover:border-amber-400'
+              }`}
+            >
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+                <Upload className="w-6 h-6 text-amber-500 animate-pulse" />
+              </div>
+              <p className="font-bold text-gray-950 text-sm">Drag and drop your spreadsheet here</p>
+              <p className="text-xs text-gray-400 mt-1 mb-5">Supports .xlsx, .xls, and .csv files up to 10MB</p>
+              
+              <label className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm">
+                Select File
+                <input
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="text-xs text-amber-600 hover:text-amber-700 font-bold hover:underline flex items-center gap-1 mt-4"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Sample Template (.xlsx)
+              </button>
+            </div>
+          ) : (
+            /* Table Preview */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-600 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <span className="flex items-center gap-1.5 text-emerald-600">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  {validCount} Rows to Import
+                </span>
+                {invalidCount > 0 && (
+                  <span className="flex items-center gap-1.5 text-red-500">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    {invalidCount} Rows with errors (will be ignored)
+                  </span>
+                )}
+                <button
+                  onClick={() => { setParsedData([]); setError(''); setSuccess(false); }}
+                  className="text-amber-600 hover:underline"
+                >
+                  Upload different file
+                </button>
+              </div>
+
+              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-[40vh] overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2.5">SKU</th>
+                      <th className="px-4 py-2.5">New Stock</th>
+                      <th className="px-4 py-2.5">Threshold</th>
+                      <th className="px-4 py-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {parsedData.map((row, idx) => (
+                      <tr key={idx} className={row.status === 'invalid' || row.status === 'failed' ? 'bg-red-50/20' : ''}>
+                        <td className="px-4 py-2 font-mono font-bold text-gray-950">{row.sku || '—'}</td>
+                        <td className="px-4 py-2 font-bold text-gray-700">{row.inventory}</td>
+                        <td className="px-4 py-2 text-gray-400">{row.lowStockThreshold ?? '—'}</td>
+                        <td className="px-4 py-2">
+                          {row.status === 'valid' && (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-full text-[10px]">Valid</span>
+                          )}
+                          {row.status === 'invalid' && (
+                            <span className="px-2 py-0.5 bg-red-50 text-red-600 font-bold rounded-full text-[10px]" title={row.error}>{row.error || 'Invalid'}</span>
+                          )}
+                          {row.status === 'success' && (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded-full text-[10px]">Imported</span>
+                          )}
+                          {row.status === 'failed' && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 font-bold rounded-full text-[10px]" title={row.error}>{row.error || 'Failed'}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 font-bold">
+              Inventory import completed successfully! Check the table above for details.
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            {success ? 'Close' : 'Cancel'}
+          </button>
+          
+          {parsedData.length > 0 && !success && (
+            <button
+              onClick={handleImport}
+              disabled={importing || validCount === 0}
+              className="px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {importing && <Loader className="w-4 h-4 animate-spin" />}
+              Confirm Import
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

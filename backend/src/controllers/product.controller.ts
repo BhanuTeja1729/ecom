@@ -239,3 +239,34 @@ export async function getPublicStats(req: Request, res: Response, next: NextFunc
     });
   } catch (err) { next(err); }
 }
+
+const bulkInventorySchema = z.array(z.object({
+  sku: z.string(),
+  inventory: z.number().int().min(0),
+  lowStockThreshold: z.number().int().min(0).optional(),
+}));
+
+export async function bulkUpdateInventory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const updates = bulkInventorySchema.parse(req.body);
+    const results = [];
+
+    for (const update of updates) {
+      const product = await Product.findOne({ sku: update.sku.toUpperCase() });
+      if (!product) {
+        results.push({ sku: update.sku, success: false, error: 'Product not found' });
+        continue;
+      }
+
+      product.inventory = update.inventory;
+      if (update.lowStockThreshold !== undefined) {
+        product.lowStockThreshold = update.lowStockThreshold;
+      }
+
+      await product.save();
+      results.push({ sku: update.sku, success: true });
+    }
+
+    res.json({ success: true, results });
+  } catch (err) { next(err); }
+}
