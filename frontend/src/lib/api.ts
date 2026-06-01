@@ -136,7 +136,8 @@ export const cartApi = {
   add: (body: { productId: string; variantId?: string; quantity: number }) => api.post('/cart/items', body),
   update: (body: { productId: string; variantId?: string; quantity: number }) => api.put('/cart/items', body),
   clear: () => api.delete('/cart'),
-  applyCoupon: (code: string) => api.post<{ success: boolean; data: any }>('/cart/coupon', { code }),
+  applyCoupon: (code: string, subtotal?: number) => api.post<{ success: boolean; data: any }>('/cart/coupon', { code, subtotal }),
+  getAvailableCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons/available'),
 };
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -189,6 +190,9 @@ export const adminApi = {
     api.put<{ success: boolean; data: any }>(`/users/admin/delivery-partners/${id}`, body),
   deleteDeliveryPartner: (id: string) =>
     api.delete<{ success: boolean }>(`/users/admin/delivery-partners/${id}`),
+  listCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons'),
+  createCoupon: (body: any) => api.post<{ success: boolean; data: any }>('/coupons', body),
+  deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
 };
 
 // ─── Delivery ────────────────────────────────────────────────────────────────

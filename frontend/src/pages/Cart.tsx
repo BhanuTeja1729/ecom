@@ -16,7 +16,7 @@ export function Cart() {
     if (!couponCode.trim()) return;
     setCouponLoading(true);
     try {
-      const res = await cartApi.applyCoupon(couponCode.trim().toUpperCase());
+      const res = await cartApi.applyCoupon(couponCode.trim().toUpperCase(), subtotal);
       const data = res.data;
       applyCoupon(data);
       toast(`Coupon applied! You saved ${data.discountType === 'percentage' ? `${data.discountValue}%` : '₹' + data.discountValue}`, 'success');

@@ -106,14 +106,24 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode, isActive: true });
       if (coupon && (!coupon.expiresAt || coupon.expiresAt > new Date())) {
+        if (req.user && coupon.usedBy && coupon.usedBy.map((id: any) => id.toString()).includes(req.user.id)) {
+          throw createError('You have already used this coupon', 400);
+        }
         const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
+        if (coupon.minimumOrderAmount && subtotal < coupon.minimumOrderAmount) {
+          throw createError(`Minimum order amount of ₹${coupon.minimumOrderAmount} is required for this coupon`, 400);
+        }
         if (coupon.discountType === 'percentage') {
           discountAmount = (subtotal * coupon.discountValue) / 100;
           if (coupon.maximumDiscountAmount) discountAmount = Math.min(discountAmount, coupon.maximumDiscountAmount);
         } else {
           discountAmount = coupon.discountValue;
         }
-        await Coupon.findByIdAndUpdate(coupon._id, { $inc: { usageCount: 1 } });
+        const couponUpdate: any = { $inc: { usageCount: 1 } };
+        if (req.user?.id) {
+          couponUpdate.$push = { usedBy: req.user.id };
+        }
+        await Coupon.findByIdAndUpdate(coupon._id, couponUpdate);
       }
     }
 

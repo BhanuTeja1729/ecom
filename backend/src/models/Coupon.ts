@@ -11,6 +11,7 @@ export interface ICoupon extends Document {
   usageCount: number;
   isActive: boolean;
   expiresAt?: Date;
+  usedBy: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,6 +27,7 @@ const CouponSchema = new Schema<ICoupon>({
   usageCount: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
   expiresAt: Date,
+  usedBy: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }],
 }, { timestamps: true });
 
 
