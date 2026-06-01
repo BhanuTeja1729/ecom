@@ -14,7 +14,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     let sender = env.EMAIL_FROM || 'onboarding@resend.dev';
     // Resend sandbox account restriction requires using onboarding@resend.dev
     if (sender.endsWith('@gmail.com') || sender.includes('noreply@blipzo.com')) {
-      sender = 'bhanuteja0741@gmail.com';
+      sender = 'onboarding@resend.dev';
     }
 
     console.log(`📧 Sending email via Resend API to: ${options.email}`);
