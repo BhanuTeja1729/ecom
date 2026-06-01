@@ -102,6 +102,7 @@ export const productApi = {
     return api.get<{ success: boolean; data: any[]; pagination: any }>(`/products${qs}`);
   },
   featured: () => api.get<{ success: boolean; data: any[] }>('/products/featured'),
+  publicStats: () => api.get<{ success: boolean; data: { products: number; customers: number } }>('/products/public-stats'),
   get: (slug: string) => api.get<{ success: boolean; data: any }>(`/products/${slug}`),
   reviews: (productId: string) => api.get<{ success: boolean; data: any[] }>(`/products/${productId}/reviews`),
   createReview: (productId: string, body: { rating: number; title?: string; body: string }) =>

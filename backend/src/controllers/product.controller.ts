@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { Product } from '../models/Product';
 import { Category } from '../models/Category';
 import { Media } from '../models/Media';
+import { User } from '../models/User';
 import cloudinary from '../config/cloudinary';
 import { createError } from '../middleware/error';
 import { slugify } from '../utils/helpers';
@@ -217,5 +218,21 @@ export async function updateInventory(req: Request, res: Response, next: NextFun
     ).populate('category', 'name slug');
     if (!product) throw createError('Product not found', 404);
     res.json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
+export async function getPublicStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const [productCount, customerCount] = await Promise.all([
+      Product.countDocuments({ isActive: true }),
+      User.countDocuments({ role: 'customer' }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        products: productCount,
+        customers: customerCount,
+      },
+    });
   } catch (err) { next(err); }
 }

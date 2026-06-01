@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  getProducts, getProduct, createProduct, updateProduct, deleteProduct, getFeaturedProducts, updateInventory,
+  getProducts, getProduct, createProduct, updateProduct, deleteProduct, getFeaturedProducts, updateInventory, getPublicStats,
 } from '../controllers/product.controller';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
@@ -8,6 +8,7 @@ const router = Router();
 
 router.get('/', getProducts);
 router.get('/featured', getFeaturedProducts);
+router.get('/public-stats', getPublicStats);
 router.get('/:slug', getProduct);
 router.post('/', authenticate, requireAdmin, createProduct);
 router.put('/:id', authenticate, requireAdmin, updateProduct);
