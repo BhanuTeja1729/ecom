@@ -237,6 +237,7 @@ export interface UserData {
   avatarUrl?: string;
   phone?: string;
   auth0Id?: string;
+  googleId?: string;
   shippingAddress?: any;
   wishlist?: string[];
 }
