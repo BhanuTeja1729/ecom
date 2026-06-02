@@ -15,6 +15,8 @@ export interface IAddress {
   state?: string;
   postalCode?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface IUser extends Document {
@@ -52,6 +54,8 @@ const AddressSchema = new Schema<IAddress>({
   state: String,
   postalCode: String,
   country: String,
+  latitude: Number,
+  longitude: Number,
 }, { _id: true });
 
 const UserSchema = new Schema<IUser>({

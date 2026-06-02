@@ -84,7 +84,7 @@ export function Checkout() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { navigate } = useRouter();
-  const { userCoords, isDeliveryAvailable, distanceFromInventory, geocodeAndCheckDistance, locationStatus, requestLocation } = useLocation();
+  const { userCoords, isDeliveryAvailable, distanceFromInventory, geocodeAndCheckDistance, locationStatus, requestLocation, deliveryRadiusKm, checkDeliveryDistance } = useLocation();
 
   const [step, setStep] = useState<Step>('shipping');
   const [shipping, setShipping] = useState<ShippingForm>(() => ({
@@ -110,6 +110,7 @@ export function Checkout() {
   const [deliverToSameLocation, setDeliverToSameLocation] = useState<boolean | null>(null);
   const [shippingAddressDistance, setShippingAddressDistance] = useState<number | null>(null);
   const [shippingAddressAvailable, setShippingAddressAvailable] = useState<boolean | null>(null);
+  const [shippingAddressCoords, setShippingAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [checkingAddress, setCheckingAddress] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
@@ -209,6 +210,7 @@ export function Checkout() {
         const result = await geocodeAndCheckDistance(fullAddress);
         setShippingAddressDistance(result.distance);
         setShippingAddressAvailable(result.available);
+        setShippingAddressCoords(result.coords);
         setCheckingAddress(false);
 
         if (result.available === false) {
@@ -252,6 +254,8 @@ export function Checkout() {
             state: shipping.state,
             postalCode: shipping.zip,
             country: shipping.country,
+            latitude: shippingAddressCoords?.lat,
+            longitude: shippingAddressCoords?.lng,
           });
           setSavedAddresses(res.data ?? []);
           toast('Address saved!', 'success');
@@ -327,6 +331,8 @@ export function Checkout() {
                 state: shipping.state,
                 postalCode: shipping.zip,
                 country: shipping.country,
+                latitude: deliverToSameLocation === true ? userCoords?.lat : shippingAddressCoords?.lat,
+                longitude: deliverToSameLocation === true ? userCoords?.lng : shippingAddressCoords?.lng,
               },
               paymentMethod: 'razorpay',
               couponCode: coupon?.code ?? '',
@@ -396,6 +402,8 @@ export function Checkout() {
           state: shipping.state,
           postalCode: shipping.zip,
           country: shipping.country,
+          latitude: deliverToSameLocation === true ? userCoords?.lat : shippingAddressCoords?.lat,
+          longitude: deliverToSameLocation === true ? userCoords?.lng : shippingAddressCoords?.lng,
         },
         paymentMethod: 'test_bypass',
         couponCode: coupon?.code ?? '',
@@ -650,18 +658,32 @@ export function Checkout() {
                                 setCheckingAddress(true);
                                 setShippingAddressDistance(null);
                                 setShippingAddressAvailable(null);
+                                setShippingAddressCoords(null);
                                 try {
-                                  const fullAddress = `${addr.doorNo ? addr.doorNo + ', ' : ''}${addr.addressLine1}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country || 'India'}`;
-                                  const result = await geocodeAndCheckDistance(fullAddress);
-                                  setShippingAddressDistance(result.distance);
-                                  setShippingAddressAvailable(result.available);
-                                  if (result.available === false) {
-                                    toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
-                                  } else if (result.available === null || result.distance === null) {
-                                    setShippingAddressAvailable(false);
-                                    toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
+                                  if (addr.latitude !== undefined && addr.latitude !== null && addr.longitude !== undefined && addr.longitude !== null) {
+                                    const dist = checkDeliveryDistance(addr.latitude, addr.longitude);
+                                    setShippingAddressDistance(dist);
+                                    setShippingAddressAvailable(dist <= deliveryRadiusKm);
+                                    setShippingAddressCoords({ lat: addr.latitude, lng: addr.longitude });
+                                    if (dist <= deliveryRadiusKm) {
+                                      toast(`Address verified! Distance: ${dist} km.`, 'success');
+                                    } else {
+                                      toast(`Delivery is not available to this address (${dist} km away). It is beyond our 25 km delivery range.`, 'error');
+                                    }
                                   } else {
-                                    toast(`Address verified! Distance: ${result.distance} km.`, 'success');
+                                    const fullAddress = `${addr.doorNo ? addr.doorNo + ', ' : ''}${addr.addressLine1}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country || 'India'}`;
+                                    const result = await geocodeAndCheckDistance(fullAddress);
+                                    setShippingAddressDistance(result.distance);
+                                    setShippingAddressAvailable(result.available);
+                                    setShippingAddressCoords(result.coords);
+                                    if (result.available === false) {
+                                      toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
+                                    } else if (result.available === null || result.distance === null) {
+                                      setShippingAddressAvailable(false);
+                                      toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
+                                    } else {
+                                      toast(`Address verified! Distance: ${result.distance} km.`, 'success');
+                                    }
                                   }
                                 } catch (err) {
                                   toast('Error checking delivery distance for this address.', 'error');
@@ -739,6 +761,7 @@ export function Checkout() {
                                   if (['doorNo', 'address', 'city', 'state', 'zip', 'country'].includes(field.key)) {
                                     setShippingAddressDistance(null);
                                     setShippingAddressAvailable(null);
+                                    setShippingAddressCoords(null);
                                   }
                                 }}
                                 placeholder={field.placeholder}
@@ -749,10 +772,33 @@ export function Checkout() {
                           ))}
                         </div>
 
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" id="saveNewAddress" defaultChecked className="w-4 h-4 accent-amber-500 rounded" />
-                          <span className="text-sm text-gray-600 font-medium">Save this address for future orders</span>
-                        </label>
+                        <div className="flex flex-col gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="saveNewAddress" defaultChecked className="w-4 h-4 accent-amber-500 rounded" />
+                            <span className="text-sm text-gray-600 font-medium">Save this address for future orders</span>
+                          </label>
+
+                          {userCoords && (
+                            <div className="pt-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShippingAddressCoords(userCoords);
+                                  setShippingAddressDistance(distanceFromInventory);
+                                  setShippingAddressAvailable(isDeliveryAvailable);
+                                  toast(`Address pinned to your high-precision GPS coordinates! Distance: ${distanceFromInventory} km.`, 'success');
+                                }}
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-bold rounded-xl transition-all shadow-sm group"
+                              >
+                                <Navigation className="w-4 h-4 text-amber-600 animate-pulse group-hover:scale-110 transition-transform" />
+                                Pin to Current GPS Location ({distanceFromInventory} km away)
+                              </button>
+                              <p className="text-[10px] text-gray-400 mt-1 pl-1">
+                                Uses high-precision browser GPS instead of generic ZIP code geocoding.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 

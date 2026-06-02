@@ -28,6 +28,8 @@ const updateProfileSchema = z.object({
     state: z.string().optional(),
     postalCode: z.string().optional(),
     country: z.string().optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
   }).optional(),
 });
 
@@ -333,6 +335,8 @@ const addressBodySchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 export async function addAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {

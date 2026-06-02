@@ -12,12 +12,16 @@ const addressSchema = z.object({
   fullName: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  doorNo: z.string().optional(),
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
+  landmark: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 const checkoutSchema = z.object({

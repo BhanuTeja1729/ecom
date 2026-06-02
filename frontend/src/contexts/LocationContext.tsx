@@ -93,18 +93,88 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   }
 
   async function geocodeAndCheckDistance(address: string) {
+    // Helper to call Nominatim with a given query string
+    async function nominatimQuery(q: string): Promise<{ lat: number; lng: number } | null> {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=in&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data && data.length > 0) {
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Helper to call Nominatim with structured parameters (more reliable for Indian addresses)
+    async function nominatimStructured(params: Record<string, string>): Promise<{ lat: number; lng: number } | null> {
+      try {
+        const qs = Object.entries(params)
+          .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+          .join('&');
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&${qs}&limit=1&countrycodes=in&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (data && data.length > 0) {
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+
     try {
-      const encoded = encodeURIComponent(address);
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=1`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
-        const dist = checkDeliveryDistance(lat, lng);
-        return { coords: { lat, lng }, distance: dist, available: dist <= DELIVERY_RADIUS_KM };
+      // Parse address parts from the address string.
+      // Checkout builds: "[doorNo, ] address, city, state, zip, country"
+      // Counting from the right: country=[−1], zip=[−2], state=[−3], city=[−4]
+      const parts = address.split(',').map(p => p.trim());
+      const city  = parts.length >= 4 ? parts[parts.length - 4].trim() : '';
+      const state = parts.length >= 3 ? parts[parts.length - 3].replace(/\s*-\s*\d+/, '').trim() : '';
+      // 6-digit Indian PIN code — most specific and reliable anchor
+      const postalMatch = address.match(/\b\d{6}\b/);
+      const postalCode = postalMatch ? postalMatch[0] : '';
+      const country = 'India';
+
+      // Strategy 1: Full address free-text query (limit to India)
+      let coords = await nominatimQuery(address);
+
+      // Strategy 2: Structured query with postalcode + city + state (most reliable for India)
+      if (!coords && postalCode && city) {
+        coords = await nominatimStructured({
+          postalcode: postalCode,
+          city,
+          state,
+          country,
+        });
+      }
+
+      // Strategy 3: postalcode + country only (PIN code is highly specific in India)
+      if (!coords && postalCode) {
+        coords = await nominatimStructured({
+          postalcode: postalCode,
+          country,
+        });
+      }
+
+      // Strategy 4: city + state + country (broad fallback)
+      if (!coords && city && state) {
+        coords = await nominatimStructured({
+          city,
+          state,
+          country,
+        });
+      }
+
+      if (coords) {
+        const dist = checkDeliveryDistance(coords.lat, coords.lng);
+        return { coords, distance: dist, available: dist <= DELIVERY_RADIUS_KM };
       }
       return { coords: null, distance: null, available: null };
     } catch {
