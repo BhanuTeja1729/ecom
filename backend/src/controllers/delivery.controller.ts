@@ -179,11 +179,21 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
       {
         $group: {
           _id: null,
-          total: { $sum: { $ifNull: ['$deliveryPayout', 0] } }
+          total: { $sum: { $ifNull: ['$deliveryPayout', 0] } },
+          unpaid: {
+            $sum: {
+              $cond: [
+                { $ne: ['$deliveryPayoutStatus', 'paid'] },
+                { $ifNull: ['$deliveryPayout', 0] },
+                0
+              ]
+            }
+          }
         }
       }
     ]);
     const totalEarnings = earningsAggregate[0]?.total || 0;
+    const unpaidEarnings = earningsAggregate[0]?.unpaid || 0;
 
     // Get flat delivery payout
     const flatDeliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
@@ -194,6 +204,7 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         completedCount,
         activeCount,
         totalEarnings,
+        unpaidEarnings,
         deliveryRatePerKm: flatDeliveryPayout
       }
     });

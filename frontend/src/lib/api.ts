@@ -192,6 +192,8 @@ export const adminApi = {
     api.put<{ success: boolean; data: any }>(`/users/admin/delivery-partners/${id}`, body),
   deleteDeliveryPartner: (id: string) =>
     api.delete<{ success: boolean }>(`/users/admin/delivery-partners/${id}`),
+  paySalary: (id: string) =>
+    api.post<{ success: boolean; message: string; modifiedCount: number }>(`/users/admin/delivery-partners/${id}/pay`),
   listCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons'),
   createCoupon: (body: any) => api.post<{ success: boolean; data: any }>('/coupons', body),
   deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
@@ -245,6 +247,7 @@ export interface UserData {
   role: 'customer' | 'delivery_partner' | 'admin';
   avatarUrl?: string;
   phone?: string;
+  upiId?: string;
   auth0Id?: string;
   googleId?: string;
   shippingAddress?: any;

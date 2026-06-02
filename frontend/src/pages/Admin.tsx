@@ -586,8 +586,8 @@ export function Admin() {
     adminApi.customers(params).then(r => setCustomers(r.data ?? [])).catch(() => {}).finally(() => setCustomersLoading(false));
   }, [tab, isAdmin, customerSearch]);
 
-  useEffect(() => {
-    if (tab !== 'employees' || !isAdmin) return;
+  const fetchDeliveryPartners = useCallback(() => {
+    if (!isAdmin) return;
     setPartnersLoading(true);
     adminApi.deliveryPartners().then(r => setPartners(r.data ?? [])).catch(() => {}).finally(() => setPartnersLoading(false));
     adminApi.getDeliveryRate()
@@ -595,7 +595,12 @@ export function Admin() {
         if (r.success) setDeliveryRate(r.data);
       })
       .catch(() => {});
-  }, [tab, isAdmin]);
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (tab !== 'employees') return;
+    fetchDeliveryPartners();
+  }, [tab, fetchDeliveryPartners]);
 
   useEffect(() => {
     if (tab !== 'coupons' || !isAdmin) return;
@@ -634,6 +639,22 @@ export function Admin() {
     } catch (err: any) {
       setPartnerFormError(err.message || 'Failed to save');
     } finally { setPartnerSaving(false); }
+  }
+
+  async function handlePaySalary(partner: any) {
+    if ((partner.unpaidEarnings ?? 0) <= 0) return;
+    const confirmPay = window.confirm(`Are you sure you want to mark salary as paid for ${partner.fullName}?\n\nThis will clear their pending payout of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} and reset it to ₹0.`);
+    if (!confirmPay) return;
+
+    try {
+      const res = await adminApi.paySalary(partner._id);
+      if (res.success) {
+        toast(`Salary of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} paid successfully to ${partner.fullName}!`, 'success');
+        fetchDeliveryPartners();
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to pay salary', 'error');
+    }
   }
 
   async function handleSaveCoupon(e: React.FormEvent) {
@@ -1430,7 +1451,17 @@ export function Admin() {
                             <span className="font-semibold text-gray-900 text-sm">{p.fullName || '—'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{p.email}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          <div>{p.email}</div>
+                          {p.upiId ? (
+                            <div className="mt-1 inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px]">
+                              <span className="uppercase text-[8px] tracking-wider text-purple-400">UPI:</span>
+                              <span className="select-all">{p.upiId}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 italic block mt-0.5">UPI: Not set</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{p.phone || '—'}</td>
                         <td className="px-4 py-3">
                           <Badge variant={p.isActive ? 'success' : 'error'}>{p.isActive ? 'Active' : 'Inactive'}</Badge>
@@ -1446,8 +1477,10 @@ export function Admin() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-black text-emerald-600 text-sm">₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
-                          <p className="text-[10px] text-gray-400">@ calculated by distance</p>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Due: ₹{(p.unpaidEarnings ?? 0).toLocaleString('en-IN')}</span>
+                            <span className="text-[9px] text-gray-400 block">Total: ₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
@@ -1469,6 +1502,14 @@ export function Admin() {
                               className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-amber-400 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all"
                             >
                               <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handlePaySalary(p)}
+                              disabled={(p.unpaidEarnings ?? 0) <= 0}
+                              title="Pay Salary"
+                              className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${(p.unpaidEarnings ?? 0) > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'}`}
+                            >
+                              <IndianRupee className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setDeletePartnerTarget(p)}

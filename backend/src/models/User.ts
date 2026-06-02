@@ -34,6 +34,7 @@ export interface IUser extends Document {
   refreshTokens: string[];
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
+  upiId?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -71,6 +72,7 @@ const UserSchema = new Schema<IUser>({
   refreshTokens: [String],
   resetPasswordToken: String,
   resetPasswordExpires: Date,
+  upiId: { type: String, trim: true },
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

@@ -110,7 +110,7 @@ export async function verifyOtp(req: Request, res: Response, next: NextFunction)
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -137,7 +137,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -175,7 +175,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -316,7 +316,7 @@ export async function googleAuth(req: Request, res: Response, next: NextFunction
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -394,7 +394,7 @@ export async function auth0Auth(req: Request, res: Response, next: NextFunction)
       success: true,
       data: {
         accessToken: localAccessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {

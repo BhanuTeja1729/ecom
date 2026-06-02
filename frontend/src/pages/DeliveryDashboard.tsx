@@ -3,7 +3,7 @@ import { Truck, Calendar, MapPin, User, DollarSign, CheckCircle2, Clock, Phone, 
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { useToast } from '../contexts/ToastContext';
-import { deliveryApi } from '../lib/api';
+import { deliveryApi, userApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 
 type Tab = 'overview' | 'active' | 'available' | 'history' | 'profile';
@@ -19,16 +19,29 @@ const ORDER_STATUS_DETAILS: Record<string, { variant: 'default' | 'success' | 'w
 };
 
 export function DeliveryDashboard() {
-  const { user, signOut, loading } = useAuth();
+  const { user, signOut, loading, refreshUser } = useAuth();
   const { navigate } = useRouter();
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>('overview');
-  const [stats, setStats] = useState<any>({ completedCount: 0, activeCount: 0, totalEarnings: 0, deliveryRatePerKm: 15 });
+  const [stats, setStats] = useState<any>({ completedCount: 0, activeCount: 0, totalEarnings: 0, unpaidEarnings: 0, deliveryRatePerKm: 15 });
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [availableOrders, setAvailableOrders] = useState<any[]>([]);
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const [profileForm, setProfileForm] = useState({ phone: '', upiId: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Initialize profile form
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        phone: user.phone || '',
+        upiId: user.upiId || ''
+      });
+    }
+  }, [user]);
 
   // Authentication guard: only delivery_partner and admin roles allowed
   useEffect(() => {
@@ -126,6 +139,20 @@ export function DeliveryDashboard() {
     }
   }
 
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      await userApi.updateProfile(profileForm);
+      if (refreshUser) await refreshUser();
+      toast('Profile updated successfully!', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to update profile', 'error');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   if (loading || !user) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -214,7 +241,7 @@ export function DeliveryDashboard() {
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                   {[
-                    { label: 'Total Earnings', value: fmt(stats.totalEarnings ?? 0), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50', border: 'border-emerald-100', desc: `Rate: ₹${stats.deliveryRatePerKm}/km` },
+                    { label: 'Pending Salary', value: fmt(stats.unpaidEarnings ?? 0), icon: DollarSign, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: `Total Earned: ${fmt(stats.totalEarnings ?? 0)}` },
                     { label: 'Active Deliveries', value: stats.activeCount ?? 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'In progress shipments' },
                     { label: 'Completed Deliveries', value: stats.completedCount ?? 0, icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100', desc: 'Successfully delivered' },
                   ].map(({ label, value, icon: Icon, color, bg, border, desc }) => (
@@ -618,31 +645,47 @@ export function DeliveryDashboard() {
                     </div>
                   </div>
 
-                  {/* Profile data fields */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-b border-gray-100 py-6">
+                  {/* Profile Form */}
+                  <form onSubmit={handleSaveProfile} className="space-y-4 pt-4 border-t border-gray-100">
                     <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Full Name</span>
-                      <span className="text-sm font-semibold text-gray-800">{user.fullName}</span>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name</label>
+                      <input type="text" value={user.fullName} disabled className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 bg-gray-50 cursor-not-allowed" />
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Email Address</span>
-                      <span className="text-sm font-semibold text-gray-800">{user.email}</span>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email Address</label>
+                      <input type="email" value={user.email} disabled className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 bg-gray-50 cursor-not-allowed" />
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Phone Number</span>
-                      <span className="text-sm font-semibold text-gray-800">{user.phone || 'Not configured'}</span>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={profileForm.phone}
+                        onChange={e => setProfileForm(f => ({ ...f, phone: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500"
+                        placeholder="Enter your phone number"
+                      />
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Agent Status</span>
-                      <Badge variant="success">Active / Online</Badge>
+                      <label className="text-sm font-semibold text-gray-700 mb-1.5 block">UPI ID for Payouts</label>
+                      <input
+                        type="text"
+                        value={profileForm.upiId}
+                        onChange={e => setProfileForm(f => ({ ...f, upiId: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 font-medium text-purple-700 bg-purple-50/30 focus:bg-white"
+                        placeholder="e.g. agent@okaxis"
+                        required
+                      />
                     </div>
-                  </div>
+                    <button type="submit" disabled={savingProfile} className="px-6 py-3 bg-gray-900 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors disabled:opacity-60">
+                      {savingProfile ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  </form>
 
                   {/* Instructions for vehicle */}
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-                    <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider mb-1.5">Dispatch Information</h4>
+                    <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider mb-1.5">Dispatch & Payout Information</h4>
                     <p className="text-xs text-amber-700 leading-relaxed">
-                      Your payout details are linked with your email address ({user.email}). Payouts are calculated as a flat fee per delivery order. Earnings are processed at the end of each week cycle.
+                      Your payout details are linked with your UPI ID. Payouts are calculated as a flat fee per delivery order. Earnings are processed and paid by the admin through the portal.
                     </p>
                   </div>
                 </div>

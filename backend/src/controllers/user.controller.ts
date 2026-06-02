@@ -18,6 +18,7 @@ const updateProfileSchema = z.object({
   fullName: z.string().min(2).max(100).optional(),
   phone: z.string().optional(),
   avatarUrl: z.string().optional(),
+  upiId: z.string().trim().max(100).optional(),
   shippingAddress: z.object({
     fullName: z.string().optional(),
     email: z.string().optional(),
@@ -34,7 +35,9 @@ const updateProfileSchema = z.object({
 export async function updateProfile(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const data = updateProfileSchema.parse(req.body);
+    console.log('[updateProfile] Updating profile for user:', req.user.id, 'with data:', data);
     const user = await User.findByIdAndUpdate(req.user.id, data, { new: true }).lean();
+    console.log('[updateProfile] Updated user document:', user);
     res.json({ success: true, data: user });
   } catch (err) { next(err); }
 }
@@ -212,6 +215,20 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
                 0
               ]
             }
+          },
+          unpaidEarnings: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status', 'delivered'] },
+                    { $ne: ['$deliveryPayoutStatus', 'paid'] }
+                  ]
+                },
+                { $ifNull: ['$deliveryPayout', 0] },
+                0
+              ]
+            }
           }
         },
       },
@@ -225,6 +242,7 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
       completedDeliveries: statsMap[p._id.toString()]?.completedCount ?? 0,
       activeDeliveries: statsMap[p._id.toString()]?.activeCount ?? 0,
       totalEarnings: statsMap[p._id.toString()]?.totalEarnings ?? 0,
+      unpaidEarnings: statsMap[p._id.toString()]?.unpaidEarnings ?? 0,
     }));
 
     res.json({ success: true, data });
@@ -386,5 +404,25 @@ export async function updateDeliveryRate(req: Request, res: Response, next: Next
       { upsert: true, new: true }
     );
     res.json({ success: true, message: 'Flat delivery payout updated successfully', data: rate });
+  } catch (err) { next(err); }
+}
+
+export async function payDeliveryPartnerSalary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.params.id;
+    const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    // Update all delivered, unpaid orders of this partner to paid
+    const result = await Order.updateMany(
+      { assignedDeliveryPartner: partnerId, status: 'delivered', deliveryPayoutStatus: { $ne: 'paid' } },
+      { $set: { deliveryPayoutStatus: 'paid' } }
+    );
+
+    res.json({
+      success: true,
+      message: `Salary paid successfully. Updated ${result.modifiedCount} orders.`,
+      modifiedCount: result.modifiedCount
+    });
   } catch (err) { next(err); }
 }

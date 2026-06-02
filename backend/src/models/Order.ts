@@ -47,6 +47,7 @@ export interface IOrder extends Document {
   deliveredAt?: Date;
   deliveryDistanceKm?: number;
   deliveryPayout?: number;
+  deliveryPayoutStatus?: 'unpaid' | 'paid';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -98,6 +99,7 @@ const OrderSchema = new Schema<IOrder>({
   deliveredAt: Date,
   deliveryDistanceKm: Number,
   deliveryPayout: Number,
+  deliveryPayoutStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
 }, { timestamps: true });
 
 OrderSchema.index({ user: 1 });

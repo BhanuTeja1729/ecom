@@ -64,7 +64,7 @@ export function Landing() {
           customers: res.data.customers,
         });
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const dynamicStats = [
@@ -129,7 +129,7 @@ export function Landing() {
                 onClick={() => navigate('/auth')}
                 className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
               >
-                Sign In
+                Let's Shop!
               </button>
             </div>
           </div>
@@ -176,12 +176,12 @@ export function Landing() {
                 Start Shopping
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button
+              {/* <button
                 onClick={() => navigate('/auth')}
                 className="flex items-center gap-2 px-8 py-4 bg-white/10 border border-white/20 text-white font-bold rounded-2xl hover:bg-white/20 transition-all text-lg backdrop-blur-sm"
               >
                 Sign In
-              </button>
+              </button> */}
             </div>
             {/* Social proof */}
             <div className="mt-10 flex items-center gap-4">
