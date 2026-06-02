@@ -118,8 +118,8 @@ async function start() {
     try {
       const { Order } = await import('./models/Order');
       const { getSettingValue } = await import('./models/Setting');
-      const rate = await getSettingValue('deliveryRatePerKm', 15);
-      console.log(`[Migration] Active delivery payout rate: ₹${rate}/km`);
+      const flatPayout = await getSettingValue('flatDeliveryPayout', 50);
+      console.log(`[Migration] Active flat delivery payout: ₹${flatPayout}`);
       const orders = await Order.find({});
       let updatedCount = 0;
       for (const order of orders) {
@@ -128,9 +128,8 @@ async function start() {
           order.deliveryDistanceKm = 5.0;
           changed = true;
         }
-        const expectedPayout = Math.round((order.deliveryDistanceKm * rate) * 100) / 100;
-        if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== expectedPayout) {
-          order.deliveryPayout = expectedPayout;
+        if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== flatPayout) {
+          order.deliveryPayout = flatPayout;
           changed = true;
         }
         if (changed) {

@@ -56,8 +56,6 @@ const AddressSchema = new Schema<IAddress>({
   doorNo: String, addressLine1: String, addressLine2: String,
   landmark: String,
   city: String, state: String, postalCode: String, country: String,
-  latitude: Number,
-  longitude: Number,
 }, { _id: false });
 
 const OrderItemSchema = new Schema<IOrderItem>({

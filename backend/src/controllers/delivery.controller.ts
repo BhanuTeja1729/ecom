@@ -155,13 +155,12 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
             ]
           });
           if (missingOrders.length > 0) {
-            const rate = await getSettingValue('deliveryRatePerKm', 15);
+            const flatPayout = await getSettingValue('flatDeliveryPayout', 50);
             for (const order of missingOrders) {
               const distance = order.deliveryDistanceKm ?? 5.0;
-              const payout = Math.round((distance * rate) * 100) / 100;
               await Order.updateOne(
                 { _id: order._id },
-                { $set: { deliveryDistanceKm: distance, deliveryPayout: payout } }
+                { $set: { deliveryDistanceKm: distance, deliveryPayout: flatPayout } }
               );
             }
           }
@@ -186,8 +185,8 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
     ]);
     const totalEarnings = earningsAggregate[0]?.total || 0;
 
-    // Get current rate per km
-    const deliveryRatePerKm = await getSettingValue('deliveryRatePerKm', 15);
+    // Get flat delivery payout
+    const flatDeliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
     res.json({
       success: true,
@@ -195,7 +194,7 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         completedCount,
         activeCount,
         totalEarnings,
-        deliveryRatePerKm
+        deliveryRatePerKm: flatDeliveryPayout
       }
     });
   } catch (err) {

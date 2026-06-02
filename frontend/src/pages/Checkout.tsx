@@ -1,12 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, AlertTriangle, Navigation, Home, Building2, Plus, Tag } from 'lucide-react';
+import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, Home, Building2, Plus, Tag } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { useLocation } from '../contexts/LocationContext';
 import { orderApi, paymentApi, userApi, cartApi } from '../lib/api';
-import { DeliveryBanner } from '../components/ui/DeliveryBanner';
 
 declare global {
   interface Window {
@@ -84,7 +82,6 @@ export function Checkout() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { navigate } = useRouter();
-  const { userCoords, isDeliveryAvailable, distanceFromInventory, geocodeAndCheckDistance, locationStatus, requestLocation, deliveryRadiusKm, checkDeliveryDistance } = useLocation();
 
   const [step, setStep] = useState<Step>('shipping');
   const [shipping, setShipping] = useState<ShippingForm>(() => ({
@@ -106,12 +103,6 @@ export function Checkout() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const deliveryDays = useMemo(() => getNextDays(7), []);
 
-  // Delivery location check state
-  const [deliverToSameLocation, setDeliverToSameLocation] = useState<boolean | null>(null);
-  const [shippingAddressDistance, setShippingAddressDistance] = useState<number | null>(null);
-  const [shippingAddressAvailable, setShippingAddressAvailable] = useState<boolean | null>(null);
-  const [shippingAddressCoords, setShippingAddressCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [checkingAddress, setCheckingAddress] = useState(false);
   const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [addressMode, setAddressMode] = useState<'saved' | 'new'>('new');
@@ -189,55 +180,7 @@ export function Checkout() {
   async function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // 1. Current GPS Location validation
-    if (deliverToSameLocation === true) {
-      if (distanceFromInventory === null || distanceFromInventory === undefined) {
-        toast('Unable to calculate delivery distance. Please ensure GPS/location permissions are enabled.', 'error');
-        return;
-      }
-      if (isDeliveryAvailable === false) {
-        toast(`Your location (${distanceFromInventory} km away) is beyond our 25 km delivery range.`, 'error');
-        return;
-      }
-    }
-
-    // 2. Shipping Address validation
-    if (deliverToSameLocation === false) {
-      // If we don't have the distance calculated yet, calculate it now
-      if (shippingAddressDistance === null) {
-        setCheckingAddress(true);
-        const fullAddress = `${shipping.doorNo ? shipping.doorNo + ', ' : ''}${shipping.address}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
-        const result = await geocodeAndCheckDistance(fullAddress);
-        setShippingAddressDistance(result.distance);
-        setShippingAddressAvailable(result.available);
-        setShippingAddressCoords(result.coords);
-        setCheckingAddress(false);
-
-        if (result.available === false) {
-          toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
-          return;
-        }
-        if (result.available === null || result.distance === null) {
-          setShippingAddressAvailable(false);
-          toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
-          return;
-        }
-        toast(`Address verified! Distance: ${result.distance} km.`, 'success');
-        return; // Return early so the user sees the verified distance before proceeding
-      }
-
-      // If we already have a calculated distance, verify it's valid and within range
-      if (shippingAddressAvailable === false) {
-        toast(`Delivery is not available to this address (${shippingAddressDistance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
-        return;
-      }
-      if (shippingAddressDistance === null || shippingAddressDistance === undefined) {
-        toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
-        return;
-      }
-    }
-
-    // Save new address to user account if checkbox is checked (only runs if validation succeeded)
+    // Save new address to user account if checkbox is checked
     if (addressMode === 'new' && user) {
       const saveCheckbox = document.getElementById('saveNewAddress') as HTMLInputElement;
       if (saveCheckbox?.checked) {
@@ -254,8 +197,6 @@ export function Checkout() {
             state: shipping.state,
             postalCode: shipping.zip,
             country: shipping.country,
-            latitude: shippingAddressCoords?.lat,
-            longitude: shippingAddressCoords?.lng,
           });
           setSavedAddresses(res.data ?? []);
           toast('Address saved!', 'success');
@@ -278,13 +219,6 @@ export function Checkout() {
 
   async function handlePayWithRazorpay() {
     if (!user) { navigate('/auth'); return; }
-
-    const deliveryDist = deliverToSameLocation === true ? distanceFromInventory : shippingAddressDistance;
-    if (deliveryDist === null || deliveryDist === undefined) {
-      toast('Delivery distance has not been calculated. Please verify your address/location.', 'error');
-      setStep('shipping');
-      return;
-    }
 
     setSubmitting(true);
 
@@ -331,8 +265,6 @@ export function Checkout() {
                 state: shipping.state,
                 postalCode: shipping.zip,
                 country: shipping.country,
-                latitude: deliverToSameLocation === true ? userCoords?.lat : shippingAddressCoords?.lat,
-                longitude: deliverToSameLocation === true ? userCoords?.lng : shippingAddressCoords?.lng,
               },
               paymentMethod: 'razorpay',
               couponCode: coupon?.code ?? '',
@@ -340,7 +272,7 @@ export function Checkout() {
               razorpayOrderId: response.razorpay_order_id,
               scheduledDeliveryDate: selectedDate?.toISOString(),
               scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
-              deliveryDistance: deliveryDist,
+              deliveryDistance: 0,
               items: items.map(item => ({
                 productId: item.product._id || item.product.id,
                 variantId: item.variant?._id || item.variant?.id,
@@ -381,13 +313,6 @@ export function Checkout() {
   async function handleTestBypass() {
     if (!user) { navigate('/auth'); return; }
 
-    const deliveryDist = deliverToSameLocation === true ? distanceFromInventory : shippingAddressDistance;
-    if (deliveryDist === null || deliveryDist === undefined) {
-      toast('Delivery distance has not been calculated. Please verify your address/location.', 'error');
-      setStep('shipping');
-      return;
-    }
-
     setSubmitting(true);
     try {
       const orderRes = await orderApi.create({
@@ -402,14 +327,12 @@ export function Checkout() {
           state: shipping.state,
           postalCode: shipping.zip,
           country: shipping.country,
-          latitude: deliverToSameLocation === true ? userCoords?.lat : shippingAddressCoords?.lat,
-          longitude: deliverToSameLocation === true ? userCoords?.lng : shippingAddressCoords?.lng,
         },
         paymentMethod: 'test_bypass',
         couponCode: coupon?.code ?? '',
         scheduledDeliveryDate: selectedDate?.toISOString(),
         scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
-        deliveryDistance: deliveryDist,
+        deliveryDistance: 0,
         items: items.map(item => ({
           productId: item.product._id || item.product.id,
           variantId: item.variant?._id || item.variant?.id,
@@ -519,306 +442,144 @@ export function Checkout() {
                   <Truck className="w-5 h-5 text-amber-500" /> Shipping Information
                 </h2>
 
-                {/* Delivery method selector */}
-                <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MapPin className="w-4 h-4 text-amber-500" />
-                    <p className="text-sm font-bold text-gray-800">Where should we deliver?</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Current Location */}
+                <div>
+                  {/* Tabs: Saved / New */}
+                  <div className="flex items-center gap-3 mb-4">
+                    {savedAddresses.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddressMode('saved');
+                          setSelectedAddressId(null);
+                          setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
+                        }}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+                      >
+                        <MapPin className="w-3.5 h-3.5" /> Saved Addresses
+                        <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">{savedAddresses.length}</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
-                        setDeliverToSameLocation(true);
-                        setAddressMode(savedAddresses.length > 0 ? 'saved' : 'new');
+                        setAddressMode('new');
                         setSelectedAddressId(null);
                         setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
-                        setShippingAddressDistance(null);
-                        setShippingAddressAvailable(null);
-                        requestLocation();
                       }}
-                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-                        deliverToSameLocation === true
-                          ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
-                          : 'border-gray-200 bg-white hover:border-amber-300'
-                      }`}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
                     >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        deliverToSameLocation === true ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        <Navigation className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">Current Location</p>
-                        <p className="text-xs text-gray-500">Use my GPS location</p>
-                      </div>
-                    </button>
-
-                    {/* Saved / Enter Address */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeliverToSameLocation(false);
-                        setAddressMode(savedAddresses.length > 0 ? 'saved' : 'new');
-                        setSelectedAddressId(null);
-                        setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
-                        setShippingAddressDistance(null);
-                        setShippingAddressAvailable(null);
-                      }}
-                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-                        deliverToSameLocation === false
-                          ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
-                          : 'border-gray-200 bg-white hover:border-amber-300'
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        deliverToSameLocation === false ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">Saved Address</p>
-                        <p className="text-xs text-gray-500">Choose or add an address</p>
-                      </div>
+                      <Plus className="w-3.5 h-3.5" /> New Address
                     </button>
                   </div>
 
-                  {/* Current location delivery banner */}
-                  {deliverToSameLocation === true && (
-                    <div className="mt-4">
-                      <DeliveryBanner compact />
+                  {/* Saved addresses list */}
+                  {addressMode === 'saved' && savedAddresses.length > 0 && (
+                    <div className="space-y-2 mb-4">
+                      {savedAddresses.map((addr: any) => {
+                        const isActive = selectedAddressId === addr._id;
+                        return (
+                          <button
+                            key={addr._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddressId(addr._id);
+                              setShipping({
+                                fullName: addr.fullName || '',
+                                email: addr.email || user?.email || '',
+                                phone: addr.phone || '',
+                                doorNo: addr.doorNo || '',
+                                address: addr.addressLine1 || '',
+                                landmark: addr.landmark || '',
+                                city: addr.city || '',
+                                state: addr.state || '',
+                                zip: addr.postalCode || '',
+                                country: addr.country || 'India',
+                              });
+                            }}
+                            className={`w-full text-left p-4 border-2 rounded-xl transition-all ${isActive ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isActive ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
+                                {isActive && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {addr.label && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md">
+                                      {addr.label === 'Home' ? <Home className="w-3.5 h-3.5" /> : addr.label === 'Work' ? <Building2 className="w-3.5 h-3.5" /> : <MapPin className="w-3.5 h-3.5" />}
+                                      {addr.label}
+                                    </span>
+                                  )}
+                                  <span className="font-bold text-gray-900 text-sm">{addr.fullName}</span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
+                                  {addr.addressLine2 && `, ${addr.addressLine2}`}
+                                </p>
+                                {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
+                                <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
+                                {addr.phone && <p className="text-xs text-gray-500 mt-0.5">📞 {addr.phone}</p>}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* New address form */}
+                  {addressMode === 'new' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Address Label</label>
+                        <div className="flex gap-2">
+                          {['Home', 'Work', 'Other'].map(l => (
+                            <button key={l} type="button" onClick={() => setShipping(s => ({ ...s, label: l } as any))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${(shipping as any).label === l ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                              {l === 'Home' ? <Home className="w-3 h-3" /> : l === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {[
+                          { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false, required: true },
+                          { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false, required: true },
+                          { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', full: false, required: true },
+                          { key: 'address', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', full: true, required: true },
+                          { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', full: true, required: false },
+                          { key: 'city', label: 'City', placeholder: 'Hyderabad', full: false, required: true },
+                          { key: 'state', label: 'State', placeholder: 'Telangana', full: false, required: true },
+                          { key: 'zip', label: 'PIN Code', placeholder: '500001', full: false, required: true },
+                          { key: 'country', label: 'Country', placeholder: 'India', full: false, required: false },
+                        ].map(field => (
+                          <div key={field.key} className={field.full ? 'sm:col-span-2' : ''}>
+                            <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
+                              {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
+                            </label>
+                            <input
+                              type="text"
+                              value={shipping[field.key as keyof ShippingForm] || ''}
+                              onChange={e => setShipping(s => ({ ...s, [field.key]: e.target.value }))}
+                              placeholder={field.placeholder}
+                              required={field.required}
+                              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" id="saveNewAddress" defaultChecked className="w-4 h-4 accent-amber-500 rounded" />
+                          <span className="text-sm text-gray-600 font-medium">Save this address for future orders</span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Address selection — appears for BOTH options */}
-                {deliverToSameLocation !== null && (
-                  <div>
-                    {/* Tabs: Saved / New */}
-                    <div className="flex items-center gap-3 mb-4">
-                      {savedAddresses.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddressMode('saved');
-                            setSelectedAddressId(null);
-                            setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
-                            setShippingAddressDistance(null);
-                            setShippingAddressAvailable(null);
-                          }}
-                          className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'saved' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                        >
-                          <MapPin className="w-3.5 h-3.5" /> Saved Addresses
-                          <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full font-bold">{savedAddresses.length}</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddressMode('new');
-                          setSelectedAddressId(null);
-                          setShipping({ ...EMPTY_SHIPPING, email: user?.email || '' });
-                          setShippingAddressDistance(null);
-                          setShippingAddressAvailable(null);
-                        }}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-1.5 ${addressMode === 'new' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
-                      >
-                        <Plus className="w-3.5 h-3.5" /> New Address
-                      </button>
-                    </div>
-
-                    {/* Saved addresses list */}
-                    {addressMode === 'saved' && savedAddresses.length > 0 && (
-                      <div className="space-y-2 mb-4">
-                        {savedAddresses.map((addr: any) => {
-                          const isActive = selectedAddressId === addr._id;
-                          return (
-                            <button
-                              key={addr._id}
-                              type="button"
-                              onClick={async () => {
-                                setSelectedAddressId(addr._id);
-                                const newShipping = {
-                                  fullName: addr.fullName || '',
-                                  email: addr.email || user?.email || '',
-                                  phone: addr.phone || '',
-                                  doorNo: addr.doorNo || '',
-                                  address: addr.addressLine1 || '',
-                                  landmark: addr.landmark || '',
-                                  city: addr.city || '',
-                                  state: addr.state || '',
-                                  zip: addr.postalCode || '',
-                                  country: addr.country || 'India',
-                                };
-                                setShipping(newShipping);
-
-                                // Auto-calculate distance for this saved address
-                                setCheckingAddress(true);
-                                setShippingAddressDistance(null);
-                                setShippingAddressAvailable(null);
-                                setShippingAddressCoords(null);
-                                try {
-                                  if (addr.latitude !== undefined && addr.latitude !== null && addr.longitude !== undefined && addr.longitude !== null) {
-                                    const dist = checkDeliveryDistance(addr.latitude, addr.longitude);
-                                    setShippingAddressDistance(dist);
-                                    setShippingAddressAvailable(dist <= deliveryRadiusKm);
-                                    setShippingAddressCoords({ lat: addr.latitude, lng: addr.longitude });
-                                    if (dist <= deliveryRadiusKm) {
-                                      toast(`Address verified! Distance: ${dist} km.`, 'success');
-                                    } else {
-                                      toast(`Delivery is not available to this address (${dist} km away). It is beyond our 25 km delivery range.`, 'error');
-                                    }
-                                  } else {
-                                    const fullAddress = `${addr.doorNo ? addr.doorNo + ', ' : ''}${addr.addressLine1}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country || 'India'}`;
-                                    const result = await geocodeAndCheckDistance(fullAddress);
-                                    setShippingAddressDistance(result.distance);
-                                    setShippingAddressAvailable(result.available);
-                                    setShippingAddressCoords(result.coords);
-                                    if (result.available === false) {
-                                      toast(`Delivery is not available to this address (${result.distance ?? 'unknown'} km away). It is beyond our 25 km delivery range.`, 'error');
-                                    } else if (result.available === null || result.distance === null) {
-                                      setShippingAddressAvailable(false);
-                                      toast('Could not calculate the delivery distance for this address. Please ensure city, state, and pin code are correct.', 'error');
-                                    } else {
-                                      toast(`Address verified! Distance: ${result.distance} km.`, 'success');
-                                    }
-                                  }
-                                } catch (err) {
-                                  toast('Error checking delivery distance for this address.', 'error');
-                                } finally {
-                                  setCheckingAddress(false);
-                                }
-                              }}
-                              className={`w-full text-left p-4 border-2 rounded-xl transition-all ${isActive ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${isActive ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
-                                  {isActive && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    {addr.label && (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-md">
-                                        {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                                        {addr.label}
-                                      </span>
-                                    )}
-                                    <span className="font-bold text-gray-900 text-sm">{addr.fullName}</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600">
-                                    {addr.doorNo && `${addr.doorNo}, `}{addr.addressLine1}
-                                    {addr.addressLine2 && `, ${addr.addressLine2}`}
-                                  </p>
-                                  {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
-                                  <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
-                                  {addr.phone && <p className="text-xs text-gray-500 mt-0.5">📞 {addr.phone}</p>}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* New address form */}
-                    {addressMode === 'new' && (
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Address Label</label>
-                          <div className="flex gap-2">
-                            {['Home', 'Work', 'Other'].map(l => (
-                              <button key={l} type="button" onClick={() => setShipping(s => ({ ...s, label: l } as any))} className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${(shipping as any).label === l ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                                {l === 'Home' ? <Home className="w-3 h-3" /> : l === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
-                                {l}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {[
-                            { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false, required: true },
-                            { key: 'phone', label: 'Phone Number', placeholder: '+91 98765 43210', full: false, required: true },
-                            { key: 'doorNo', label: 'D.No / Flat No', placeholder: '12-34-56 / Flat 4B', full: false, required: true },
-                            { key: 'address', label: 'Street / Area', placeholder: 'MG Road, Banjara Hills', full: true, required: true },
-                            { key: 'landmark', label: 'Near Landmark', placeholder: 'Near City Center Mall', full: true, required: false },
-                            { key: 'city', label: 'City', placeholder: 'Hyderabad', full: false, required: true },
-                            { key: 'state', label: 'State', placeholder: 'Telangana', full: false, required: true },
-                            { key: 'zip', label: 'PIN Code', placeholder: '500001', full: false, required: true },
-                            { key: 'country', label: 'Country', placeholder: 'India', full: false, required: false },
-                          ].map(field => (
-                            <div key={field.key} className={field.full ? 'sm:col-span-2' : ''}>
-                              <label className="text-sm font-semibold text-gray-700 mb-1.5 block">
-                                {field.label}{field.required && <span className="text-red-400 ml-0.5">*</span>}
-                              </label>
-                              <input
-                                type="text"
-                                value={shipping[field.key as keyof ShippingForm] || ''}
-                                onChange={e => {
-                                  setShipping(s => ({ ...s, [field.key]: e.target.value }));
-                                  // Reset distance verification status if any address field changes
-                                  if (['doorNo', 'address', 'city', 'state', 'zip', 'country'].includes(field.key)) {
-                                    setShippingAddressDistance(null);
-                                    setShippingAddressAvailable(null);
-                                    setShippingAddressCoords(null);
-                                  }
-                                }}
-                                placeholder={field.placeholder}
-                                required={field.required}
-                                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
-                              />
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" id="saveNewAddress" defaultChecked className="w-4 h-4 accent-amber-500 rounded" />
-                            <span className="text-sm text-gray-600 font-medium">Save this address for future orders</span>
-                          </label>
-
-                          {userCoords && (
-                            <div className="pt-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShippingAddressCoords(userCoords);
-                                  setShippingAddressDistance(distanceFromInventory);
-                                  setShippingAddressAvailable(isDeliveryAvailable);
-                                  toast(`Address pinned to your high-precision GPS coordinates! Distance: ${distanceFromInventory} km.`, 'success');
-                                }}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-bold rounded-xl transition-all shadow-sm group"
-                              >
-                                <Navigation className="w-4 h-4 text-amber-600 animate-pulse group-hover:scale-110 transition-transform" />
-                                Pin to Current GPS Location ({distanceFromInventory} km away)
-                              </button>
-                              <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                Uses high-precision browser GPS instead of generic ZIP code geocoding.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Delivery check results */}
-                    {shippingAddressAvailable !== null && (
-                      <div className="mt-4"><DeliveryBanner compact overrideDistance={shippingAddressDistance} overrideAvailable={shippingAddressAvailable} /></div>
-                    )}
-                    {checkingAddress && (
-                      <div className="mt-4"><DeliveryBanner compact checking /></div>
-                    )}
-                  </div>
-                )}
-
-                {/* Validation */}
-                {deliverToSameLocation === null && (
-                  <p className="mt-4 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" /> Please select a delivery method to continue.
-                  </p>
-                )}
-                {deliverToSameLocation !== null && addressMode === 'saved' && !selectedAddressId && (
+                {addressMode === 'saved' && !selectedAddressId && (
                   <p className="mt-3 text-xs text-amber-600 font-semibold flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> Please select a saved address to continue.
                   </p>
@@ -826,36 +587,10 @@ export function Checkout() {
 
                 <button
                   type="submit"
-                  disabled={
-                    deliverToSameLocation === null ||
-                    checkingAddress ||
-                    (addressMode === 'saved' && !selectedAddressId) ||
-                    (deliverToSameLocation === true && (distanceFromInventory === null || isDeliveryAvailable === false)) ||
-                    (deliverToSameLocation === false && shippingAddressDistance !== null && shippingAddressAvailable === false)
-                  }
+                  disabled={addressMode === 'saved' && !selectedAddressId}
                   className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {checkingAddress ? (
-                    <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Calculating Distance…</>
-                  ) : deliverToSameLocation === true ? (
-                    distanceFromInventory === null ? (
-                      <>Waiting for GPS Location...</>
-                    ) : isDeliveryAvailable === false ? (
-                      <>Out of Delivery Range</>
-                    ) : (
-                      <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
-                    )
-                  ) : deliverToSameLocation === false ? (
-                    shippingAddressDistance === null ? (
-                      <>Calculate Distance & Verify</>
-                    ) : shippingAddressAvailable === false ? (
-                      <>Out of Delivery Range</>
-                    ) : (
-                      <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
-                    )
-                  ) : (
-                    <>Continue to Schedule <ChevronRight className="w-4 h-4" /></>
-                  )}
+                  Continue to Schedule <ChevronRight className="w-4 h-4" />
                 </button>
               </form>
             )}
@@ -1006,28 +741,19 @@ export function Checkout() {
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Shipping To</p>
                     <button onClick={() => setStep('shipping')} className="text-xs text-amber-600 font-semibold hover:underline">Edit</button>
                   </div>
-                  {deliverToSameLocation === true ? (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-                        <Navigation className="w-3.5 h-3.5 text-amber-500" /> Current Location
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{shipping.fullName}</p>
+                    <p className="text-sm text-gray-600">
+                      {shipping.doorNo && `${shipping.doorNo}, `}{shipping.address}
+                    </p>
+                    {shipping.landmark && <p className="text-xs text-gray-500">Near: {shipping.landmark}</p>}
+                    <p className="text-sm text-gray-600">{shipping.city}, {shipping.state} {shipping.zip}</p>
+                    {(shipping.phone || user?.email || shipping.email) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {shipping.phone}{shipping.phone && (user?.email || shipping.email) && ' · '}{user?.email || shipping.email}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">Delivering to your current GPS location</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{shipping.fullName}</p>
-                      <p className="text-sm text-gray-600">
-                        {shipping.doorNo && `${shipping.doorNo}, `}{shipping.address}
-                      </p>
-                      {shipping.landmark && <p className="text-xs text-gray-500">Near: {shipping.landmark}</p>}
-                      <p className="text-sm text-gray-600">{shipping.city}, {shipping.state} {shipping.zip}</p>
-                      {(shipping.phone || user?.email || shipping.email) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {shipping.phone}{shipping.phone && (user?.email || shipping.email) && ' · '}{user?.email || shipping.email}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 {/* Delivery schedule summary */}

@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useWishlist } from '../contexts/WishlistContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { useLocation } from '../contexts/LocationContext';
 import { orderApi, userApi, authApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductCard } from '../components/ui/ProductCard';
@@ -25,7 +24,6 @@ export function Dashboard() {
   const { user, signOut, refreshUser } = useAuth();
   const { items: wishlistIds } = useWishlist();
   const { toast } = useToast();
-  const { userCoords, checkDeliveryDistance } = useLocation();
   const { navigate } = useRouter();
   const [tab, setTab] = useState<Tab>('overview');
   const [orders, setOrders] = useState<any[]>([]);
@@ -43,8 +41,6 @@ export function Dashboard() {
     label: '', fullName: '', email: '', phone: '',
     doorNo: '', addressLine1: '', addressLine2: '', landmark: '',
     city: '', state: '', postalCode: '', country: 'India',
-    latitude: undefined as number | undefined,
-    longitude: undefined as number | undefined,
   });
   const [savingAddress, setSavingAddress] = useState(false);
   const [faqSearch, setFaqSearch] = useState('');
@@ -350,7 +346,7 @@ export function Dashboard() {
                   <h2 className="text-xl font-black text-gray-900">Saved Addresses</h2>
                   {!showAddressForm && (
                     <button
-                      onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India', latitude: undefined, longitude: undefined }); }}
+                      onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India' }); }}
                       className="px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center gap-1.5"
                     >
                       <Plus className="w-4 h-4" /> Add Address
@@ -421,12 +417,6 @@ export function Dashboard() {
                           </div>
                         ))}
                       </div>
-                      {addressForm.latitude !== undefined && addressForm.latitude !== null && addressForm.longitude !== undefined && addressForm.longitude !== null && (
-                        <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold">
-                          <Navigation className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
-                          GPS Coordinates bound: {addressForm.latitude.toFixed(6)}, {addressForm.longitude.toFixed(6)} ({checkDeliveryDistance(addressForm.latitude, addressForm.longitude)} km from store)
-                        </div>
-                      )}
                       <div className="flex flex-wrap gap-3 pt-2">
                         <button type="submit" disabled={savingAddress} className="px-6 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60">
                           {savingAddress ? 'Saving...' : editingAddressId ? 'Update Address' : 'Save Address'}
@@ -434,19 +424,6 @@ export function Dashboard() {
                         <button type="button" onClick={() => { setShowAddressForm(false); setEditingAddressId(null); }} className="px-6 py-3 border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors">
                           Cancel
                         </button>
-                        {userCoords && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAddressForm(f => ({ ...f, latitude: userCoords.lat, longitude: userCoords.lng }));
-                              toast(`Coordinates bound to your current GPS position!`, 'success');
-                            }}
-                            className="px-4 py-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-sm font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-sm group"
-                          >
-                            <Navigation className="w-4 h-4 text-amber-600 animate-pulse group-hover:scale-110 transition-transform" />
-                            Use Current GPS Location
-                          </button>
-                        )}
                       </div>
                     </form>
                   </div>
@@ -460,7 +437,7 @@ export function Dashboard() {
                     <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="font-bold text-gray-900 mb-2">No addresses saved</p>
                     <p className="text-gray-500 text-sm mb-4">Save your delivery addresses for faster checkout</p>
-                    <button onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India', latitude: undefined, longitude: undefined }); }} className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors">Add Your First Address</button>
+                    <button onClick={() => { setShowAddressForm(true); setEditingAddressId(null); setAddressForm({ label: '', fullName: '', email: '', phone: '', doorNo: '', addressLine1: '', addressLine2: '', landmark: '', city: '', state: '', postalCode: '', country: 'India' }); }} className="px-6 py-2.5 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors">Add Your First Address</button>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -473,11 +450,6 @@ export function Dashboard() {
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-200">
                                   {addr.label === 'Home' ? <Home className="w-3 h-3" /> : addr.label === 'Work' ? <Building2 className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
                                   {addr.label}
-                                </span>
-                              )}
-                              {addr.latitude !== undefined && addr.latitude !== null && addr.longitude !== undefined && addr.longitude !== null && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200">
-                                  <Truck className="w-3 h-3 text-emerald-600 animate-pulse" /> {checkDeliveryDistance(addr.latitude, addr.longitude)} km from store
                                 </span>
                               )}
                               <p className="font-bold text-gray-900 text-sm">{addr.fullName}</p>
@@ -498,8 +470,6 @@ export function Dashboard() {
                                   label: addr.label || '', fullName: addr.fullName || '', email: addr.email || '', phone: addr.phone || '',
                                   doorNo: addr.doorNo || '', addressLine1: addr.addressLine1 || '', addressLine2: addr.addressLine2 || '', landmark: addr.landmark || '',
                                   city: addr.city || '', state: addr.state || '', postalCode: addr.postalCode || '', country: addr.country || 'India',
-                                  latitude: addr.latitude,
-                                  longitude: addr.longitude,
                                 });
                                 setShowAddressForm(true);
                               }}

@@ -28,8 +28,6 @@ const updateProfileSchema = z.object({
     state: z.string().optional(),
     postalCode: z.string().optional(),
     country: z.string().optional(),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
   }).optional(),
 });
 
@@ -181,14 +179,13 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
         ]
       });
       if (missingOrders.length > 0) {
-        const rate = await Setting.findOne({ key: 'deliveryRatePerKm' });
-        const rateVal = rate ? rate.value : 15;
+        const rate = await Setting.findOne({ key: 'flatDeliveryPayout' });
+        const rateVal = rate ? rate.value : 50;
         for (const order of missingOrders) {
           const distance = order.deliveryDistanceKm ?? 5.0;
-          const payout = Math.round((distance * rateVal) * 100) / 100;
           await Order.updateOne(
             { _id: order._id },
-            { $set: { deliveryDistanceKm: distance, deliveryPayout: payout } }
+            { $set: { deliveryDistanceKm: distance, deliveryPayout: rateVal } }
           );
         }
       }
@@ -335,8 +332,6 @@ const addressBodySchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
 });
 
 export async function addAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
@@ -377,8 +372,8 @@ export async function deleteAddress(req: Request & { user?: any }, res: Response
 
 export async function getDeliveryRate(req: Request, res: Response, next: NextFunction) {
   try {
-    const rate = await Setting.findOne({ key: 'deliveryRatePerKm' });
-    res.json({ success: true, data: rate ? rate.value : 15 }); // default to ₹15/km
+    const rate = await Setting.findOne({ key: 'flatDeliveryPayout' });
+    res.json({ success: true, data: rate ? rate.value : 50 }); // default to ₹50
   } catch (err) { next(err); }
 }
 
@@ -386,10 +381,10 @@ export async function updateDeliveryRate(req: Request, res: Response, next: Next
   try {
     const { rate } = z.object({ rate: z.number().min(0) }).parse(req.body);
     await Setting.findOneAndUpdate(
-      { key: 'deliveryRatePerKm' },
+      { key: 'flatDeliveryPayout' },
       { value: rate },
       { upsert: true, new: true }
     );
-    res.json({ success: true, message: 'Delivery rate updated successfully', data: rate });
+    res.json({ success: true, message: 'Flat delivery payout updated successfully', data: rate });
   } catch (err) { next(err); }
 }

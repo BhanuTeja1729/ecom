@@ -20,8 +20,6 @@ const addressSchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
 });
 
 const checkoutSchema = z.object({
@@ -140,14 +138,8 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       shippingAmount
     );
 
-    // Calculate delivery payout from distance
-    const deliveryDistance = data.deliveryDistance;
-    if (deliveryDistance === undefined || deliveryDistance === null) {
-      throw createError('Delivery distance is required to complete the checkout.', 400);
-    }
-
-    const rate = await getSettingValue('deliveryRatePerKm', 15);
-    const deliveryPayout = Math.round((deliveryDistance * rate) * 100) / 100;
+    const deliveryDistance = data.deliveryDistance ?? 0;
+    const deliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
     const order = await Order.create({
       orderNumber: generateOrderNumber(),

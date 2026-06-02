@@ -349,10 +349,7 @@ export function DeliveryDashboard() {
                             </div>
                             <div className="flex flex-col sm:text-right">
                               <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Estimated Pay</span>
-                              <span className="text-lg font-black text-emerald-600">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
-                              {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
-                                <span className="text-[10px] text-gray-400 font-normal">({order.deliveryDistanceKm} km)</span>
-                              )}
+                              <span className="text-lg font-black text-emerald-600">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
                             </div>
                           </div>
 
@@ -539,10 +536,7 @@ export function DeliveryDashboard() {
                         <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
                           <div className="text-left md:text-right">
                             <span className="text-[10px] text-gray-400 font-bold block uppercase">Est. Payout</span>
-                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
-                            {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
-                              <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
-                            )}
+                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
                           </div>
                           <button
                             onClick={() => handleClaimOrder(order._id, order.orderNumber)}
@@ -596,10 +590,7 @@ export function DeliveryDashboard() {
                         </div>
                         <div className="text-left md:text-right shrink-0">
                           <span className="text-[10px] text-gray-400 font-bold block uppercase">Earned</span>
-                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? ((order.deliveryDistanceKm || 0) * (stats.deliveryRatePerKm || 0)))}</span>
-                          {order.deliveryDistanceKm !== undefined && order.deliveryDistanceKm !== null && (
-                            <span className="text-[10px] text-gray-400 font-normal block">({order.deliveryDistanceKm} km)</span>
-                          )}
+                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
                         </div>
                       </div>
                     ))}
@@ -651,7 +642,7 @@ export function DeliveryDashboard() {
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
                     <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider mb-1.5">Dispatch Information</h4>
                     <p className="text-xs text-amber-700 leading-relaxed">
-                      Your payout details are linked with your email address ({user.email}). Payouts are calculated based on the delivery distance. Earnings are processed at the end of each week cycle.
+                      Your payout details are linked with your email address ({user.email}). Payouts are calculated as a flat fee per delivery order. Earnings are processed at the end of each week cycle.
                     </p>
                   </div>
                 </div>

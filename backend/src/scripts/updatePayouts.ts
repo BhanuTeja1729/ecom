@@ -7,8 +7,8 @@ import { getSettingValue } from '../models/Setting';
 async function run() {
   try {
     await connectDB();
-    const rate = await getSettingValue('deliveryRatePerKm', 15);
-    console.log(`Using active delivery payout rate: ₹${rate}/km`);
+    const flatPayout = await getSettingValue('flatDeliveryPayout', 50);
+    console.log(`Using active flat delivery payout: ₹${flatPayout}`);
 
     const orders = await Order.find({});
     console.log(`Found ${orders.length} orders to inspect.`);
@@ -22,9 +22,8 @@ async function run() {
         changed = true;
       }
 
-      const expectedPayout = Math.round((order.deliveryDistanceKm * rate) * 100) / 100;
-      if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== expectedPayout) {
-        order.deliveryPayout = expectedPayout;
+      if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== flatPayout) {
+        order.deliveryPayout = flatPayout;
         changed = true;
       }
 
