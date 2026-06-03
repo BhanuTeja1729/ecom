@@ -61,7 +61,7 @@ export function Hero() {
             {[
               { icon: Shield, label: 'Secure Payments', sub: '256-bit SSL encryption' },
               { icon: Truck, label: 'Free Shipping', sub: 'On orders over $75' },
-              { icon: Star, label: '4.9 Rating', sub: '50k+ reviews' },
+              { icon: Star, label: '4.9 Rating', sub: '600+ reviews' },
             ].map(({ icon: Icon, label, sub }) => (
               <div key={label} className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">

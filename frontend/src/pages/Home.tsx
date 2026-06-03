@@ -14,7 +14,7 @@ const TRUST_FEATURES = [
 ];
 
 const STATS = [
-  { value: '50K+', label: 'Happy Customers' },
+  { value: '600+', label: 'Happy Customers' },
   { value: '4.9', label: 'Average Rating' },
   { value: '500+', label: 'Premium Products' },
   { value: '99%', label: 'Satisfaction Rate' },

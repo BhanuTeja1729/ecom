@@ -14,7 +14,7 @@ export function Auth() {
   const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   // OTP states
   const [otpSent, setOtpSent] = useState(false);
   const [otpValues, setOtpValues] = useState<string[]>(Array(6).fill(''));
@@ -66,7 +66,7 @@ export function Auth() {
         setLoading(false);
         return;
       }
-      
+
       const { error } = await sendOtp(email, fullName, password, role);
       if (error) {
         toast(error, 'error');
@@ -127,7 +127,7 @@ export function Auth() {
   function handleOtpChange(index: number, value: string) {
     if (value.length > 1) value = value[0];
     if (!/^\d*$/.test(value)) return;
-    
+
     const newOtp = [...otpValues];
     newOtp[index] = value;
     setOtpValues(newOtp);
@@ -205,10 +205,9 @@ export function Auth() {
           <p className="text-gray-400 leading-relaxed max-w-sm">
             Join 50,000+ members enjoying exclusive deals, early access to new products, and a world-class shopping experience.
           </p>
-          <div className="grid grid-cols-3 gap-4 mt-10">
+          <div className="grid grid-cols-2 gap-4 mt-10">
             {[
-              { value: '50K+', label: 'Members' },
-              { value: '4.9★', label: 'Rating' },
+              { value: '600+', label: 'Members' },
               { value: '500+', label: 'Products' },
             ].map(({ value, label }) => (
               <div key={label} className="bg-white/10 rounded-2xl p-4">
@@ -315,8 +314,8 @@ export function Auth() {
                   {mode === 'forgot-password'
                     ? "Enter your email address and we'll send you a link to reset your password"
                     : mode === 'login'
-                    ? 'Sign in to your account to continue'
-                    : 'Join us for exclusive access and deals'}
+                      ? 'Sign in to your account to continue'
+                      : 'Join us for exclusive access and deals'}
                 </p>
               </div>
 

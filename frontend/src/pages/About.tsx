@@ -97,7 +97,7 @@ export function About() {
                 onClick={() => navigate('/auth')}
                 className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
               >
-                Sign In
+                Let's Shop!
               </button>
             </div>
           </div>
