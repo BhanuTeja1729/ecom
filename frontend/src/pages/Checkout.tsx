@@ -1,10 +1,15 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Check, ChevronRight, Shield, Truck, CalendarDays, Clock, MapPin, Home, Building2, Plus, Tag, Banknote, Package } from 'lucide-react';
+import { Check, ChevronRight, Shield, Truck, CalendarDays, Clock, MapPin, Home, Building2, Plus, Tag, Banknote, Package, Navigation } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
 import { orderApi, userApi, cartApi } from '../lib/api';
+import { useLocation } from '../contexts/LocationContext';
+import { LocationPickerMap } from '../components/LocationPickerMap';
+
+
+
 
 type Step = 'shipping' | 'schedule' | 'review';
 
@@ -19,19 +24,22 @@ interface ShippingForm {
   state: string;
   zip: string;
   country: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 const EMPTY_SHIPPING: ShippingForm = {
   fullName: '', email: '', phone: '',
   doorNo: '', address: '', landmark: '',
   city: '', state: '', zip: '', country: 'India',
+  latitude: null, longitude: null,
 };
 
 const TIME_SLOTS = [
-  { id: 'morning',   label: 'Morning',    time: '8:00 AM – 11:00 AM',  icon: '🌅', startHour: 8 },
-  { id: 'midday',    label: 'Midday',     time: '11:00 AM – 2:00 PM',  icon: '☀️', startHour: 11 },
-  { id: 'afternoon', label: 'Afternoon',  time: '2:00 PM – 5:00 PM',   icon: '🌤️', startHour: 14 },
-  { id: 'evening',   label: 'Evening',    time: '5:00 PM – 8:00 PM',   icon: '🌇', startHour: 17 },
+  { id: 'morning', label: 'Morning', time: '8:00 AM – 11:00 AM', icon: '🌅', startHour: 8 },
+  { id: 'midday', label: 'Midday', time: '11:00 AM – 2:00 PM', icon: '☀️', startHour: 11 },
+  { id: 'afternoon', label: 'Afternoon', time: '2:00 PM – 5:00 PM', icon: '🌤️', startHour: 14 },
+  { id: 'evening', label: 'Evening', time: '5:00 PM – 8:00 PM', icon: '🌇', startHour: 17 },
 ];
 
 function getNextDays(count: number): Date[] {
@@ -75,6 +83,11 @@ export function Checkout() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { navigate } = useRouter();
+  const { checkDeliveryDistance, geocodeAndCheckDistance, inventoryCoords } = useLocation();
+  const [calculatedDistance, setCalculatedDistance] = useState<number | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+
+
 
   const [step, setStep] = useState<Step>('shipping');
   const [shipping, setShipping] = useState<ShippingForm>(() => ({
@@ -89,6 +102,79 @@ export function Checkout() {
   }, [user, shipping.email]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  const handleLocationPicked = (coords: { lat: number; lng: number }, addressDetails?: any) => {
+
+    setShipping(s => ({
+      ...s,
+      latitude: coords.lat,
+      longitude: coords.lng,
+      address: addressDetails?.road || addressDetails?.suburb || addressDetails?.neighbourhood || s.address || '',
+      city: addressDetails?.city || addressDetails?.town || addressDetails?.village || s.city || '',
+      state: addressDetails?.state || s.state || '',
+      zip: addressDetails?.postcode || s.zip || '',
+      country: addressDetails?.country || 'India'
+    }));
+    const dist = checkDeliveryDistance(coords.lat, coords.lng);
+    setCalculatedDistance(dist);
+  };
+
+  const handleGetCurrentLocation = () => {
+
+    if (!navigator.geolocation) {
+      toast('Geolocation is not supported by your browser', 'error');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setShipping(s => ({ ...s, latitude, longitude }));
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+          if (!res.ok) throw new Error('Geocoding failed');
+          const data = await res.json();
+          if (data && data.address) {
+            const addr = data.address;
+            const street = addr.road || addr.suburb || addr.neighbourhood || addr.amenity || '';
+            const city = addr.city || addr.town || addr.village || addr.county || '';
+            const state = addr.state || '';
+            const postalCode = addr.postcode || '';
+            const country = addr.country || 'India';
+            setShipping(s => ({
+              ...s,
+              address: street || s.address,
+              city: city || s.city,
+              state: state || s.state,
+              zip: postalCode || s.zip,
+              country: country || s.country,
+            }));
+            toast('Location and address details captured!', 'success');
+          } else {
+            toast('Location coordinates captured, but street address could not be resolved', 'warning');
+          }
+        } catch (err) {
+          toast('Coordinates captured. Fill in other details manually.', 'info');
+        } finally {
+          setLocating(false);
+        }
+      },
+      (error) => {
+        setLocating(false);
+        let msg = 'Failed to get current location';
+        if (error.code === error.PERMISSION_DENIED) {
+          msg = 'Location permission denied. Please enable location access in browser settings.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          msg = 'Location information is unavailable.';
+        } else if (error.code === error.TIMEOUT) {
+          msg = 'Location request timed out.';
+        }
+        toast(msg, 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
   const [orderNumber, setOrderNumber] = useState('');
 
   // Schedule delivery state
@@ -161,7 +247,7 @@ export function Checkout() {
           setSavedAddresses(addrs);
           if (addrs.length > 0) setAddressMode('saved');
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user]);
 
@@ -172,6 +258,24 @@ export function Checkout() {
 
   async function handleShippingSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    let lat = shipping.latitude;
+    let lng = shipping.longitude;
+    let distanceKm = 0;
+
+    if (!lat || !lng) {
+      toast('Selecting Geolocation is mandatory. Please select your delivery location using GPS or Map.', 'error');
+      return;
+    }
+
+    distanceKm = checkDeliveryDistance(lat, lng);
+    setCalculatedDistance(distanceKm);
+
+
+    if (distanceKm > 25) {
+      toast(`Delivery is only available within 25 km of our store. Distance to your address: ${distanceKm.toFixed(1)} km.`, 'error');
+      return;
+    }
 
     // Save new address to user account if checkbox is checked
     if (addressMode === 'new' && user) {
@@ -190,6 +294,8 @@ export function Checkout() {
             state: shipping.state,
             postalCode: shipping.zip,
             country: shipping.country,
+            latitude: lat,
+            longitude: lng,
           });
           setSavedAddresses(res.data ?? []);
           toast('Address saved!', 'success');
@@ -201,6 +307,7 @@ export function Checkout() {
 
     setStep('schedule');
   }
+
 
   function handleScheduleSubmit() {
     if (!selectedDate || !selectedSlot) {
@@ -228,12 +335,15 @@ export function Checkout() {
           state: shipping.state,
           postalCode: shipping.zip,
           country: shipping.country,
+          latitude: shipping.latitude,
+          longitude: shipping.longitude,
         },
         paymentMethod: 'cod',
         couponCode: coupon?.code ?? '',
         scheduledDeliveryDate: selectedDate?.toISOString(),
         scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
-        deliveryDistance: 0,
+        deliveryDistance: calculatedDistance ?? 0,
+
         items: items.map(item => ({
           productId: item.product._id || item.product.id,
           variantId: item.variant?._id || item.variant?.id,
@@ -409,6 +519,8 @@ export function Checkout() {
                                 state: addr.state || '',
                                 zip: addr.postalCode || '',
                                 country: addr.country || 'India',
+                                latitude: addr.latitude || null,
+                                longitude: addr.longitude || null,
                               });
                             }}
                             className={`w-full text-left p-4 border-2 rounded-xl transition-all ${isActive ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-gray-200 hover:border-gray-300'}`}
@@ -434,6 +546,7 @@ export function Checkout() {
                                 {addr.landmark && <p className="text-xs text-gray-400">Near: {addr.landmark}</p>}
                                 <p className="text-xs text-gray-500">{addr.city}, {addr.state} {addr.postalCode}</p>
                                 {addr.phone && <p className="text-xs text-gray-500 mt-0.5">📞 {addr.phone}</p>}
+
                               </div>
                             </div>
                           </button>
@@ -456,6 +569,60 @@ export function Checkout() {
                           ))}
                         </div>
                       </div>
+
+                      {/* Location Auto-Fill Options */}
+                      <div className="flex flex-col gap-4 p-4 bg-amber-50/50 rounded-2xl border-2 border-amber-200/50">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                              <Navigation className="w-4 h-4 text-amber-600" /> Geolocation & Maps
+                            </h4>
+                            <p className="text-xs text-gray-500 mt-0.5">Use GPS or point on map to auto-fill address</p>
+                          </div>
+                          
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              disabled={locating}
+                              onClick={handleGetCurrentLocation}
+                              className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-xl hover:bg-amber-600 transition-all flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                            >
+                              <Navigation className={`w-3.5 h-3.5 ${locating ? 'animate-spin' : ''}`} />
+                              {locating ? 'Locating...' : 'Use Device GPS'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowMapPicker(!showMapPicker)}
+                              className={`px-4 py-2 font-bold text-xs rounded-xl border transition-all flex items-center gap-2 shadow-sm ${
+                                showMapPicker
+                                  ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                                  : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'
+                              }`}
+                            >
+                              <MapPin className="w-3.5 h-3.5" />
+                              {showMapPicker ? 'Close Map Picker' : 'Add Location on Map'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Interactive Location Picker Map */}
+                        {showMapPicker && (
+                          <LocationPickerMap
+                            onLocationSelected={handleLocationPicked}
+                            warehouseCoords={{ lat: inventoryCoords.lat, lng: inventoryCoords.lng }}
+                            maxDistanceKm={25}
+                            initialCoords={shipping.latitude && shipping.longitude ? { lat: shipping.latitude, lng: shipping.longitude } : null}
+                          />
+                        )}
+
+                        {shipping.latitude && shipping.longitude && (
+                          <div className="text-xs text-emerald-700 font-bold flex items-center gap-1.5 mt-1 bg-emerald-50 border border-emerald-200/40 px-2.5 py-1.5 rounded-xl w-fit animate-in">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Location pinned successfully!
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {[
                           { key: 'fullName', label: 'Full Name', placeholder: 'John Doe', full: false, required: true },
@@ -500,7 +667,10 @@ export function Checkout() {
                   </p>
                 )}
 
+
+
                 <button
+
                   type="submit"
                   disabled={addressMode === 'saved' && !selectedAddressId}
                   className="mt-6 w-full py-4 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -538,11 +708,10 @@ export function Checkout() {
                               }
                             }
                           }}
-                          className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${
-                            isSelected
+                          className={`relative flex flex-col items-center py-3 px-2 rounded-xl border-2 transition-all ${isSelected
                               ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
                               : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
-                          }`}
+                            }`}
                         >
                           <span className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isSelected ? 'text-amber-600' : 'text-gray-400'}`}>
                             {getDayLabel(day)}
@@ -581,13 +750,12 @@ export function Checkout() {
                           type="button"
                           disabled={isPast}
                           onClick={() => !isPast && setSelectedSlot(slot.id)}
-                          className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
-                            isPast
+                          className={`relative flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${isPast
                               ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
                               : isSelected
-                              ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
-                              : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
-                          }`}
+                                ? 'border-amber-500 bg-amber-50 shadow-md shadow-amber-100'
+                                : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
+                            }`}
                         >
                           <span className="text-2xl">{slot.icon}</span>
                           <div className="flex-1">
@@ -601,9 +769,8 @@ export function Checkout() {
                           {isPast ? (
                             <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Past</span>
                           ) : (
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                              isSelected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
-                            }`}>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
+                              }`}>
                               {isSelected && <Check className="w-3 h-3 text-white" />}
                             </div>
                           )}
@@ -854,11 +1021,10 @@ export function Checkout() {
                                     }
                                     handleApplyDirectly(couponItem.code);
                                   }}
-                                  className={`group relative border border-dashed rounded-xl p-2.5 transition-all flex items-center justify-between ${
-                                    isEligible
+                                  className={`group relative border border-dashed rounded-xl p-2.5 transition-all flex items-center justify-between ${isEligible
                                       ? 'border-gray-200 hover:border-amber-400 bg-gray-50/50 hover:bg-amber-50/40 cursor-pointer'
                                       : 'border-gray-100 bg-gray-50/10 opacity-60 cursor-not-allowed'
-                                  }`}
+                                    }`}
                                 >
                                   <div className="flex-1 pr-2">
                                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -884,11 +1050,10 @@ export function Checkout() {
                                   </div>
                                   <button
                                     type="button"
-                                    className={`text-[10px] font-black px-2 py-1 rounded-lg transition-all ${
-                                      isEligible
+                                    className={`text-[10px] font-black px-2 py-1 rounded-lg transition-all ${isEligible
                                         ? 'text-amber-600 bg-white border border-amber-200 hover:bg-amber-500 hover:text-white'
                                         : 'text-gray-400 bg-gray-100 border border-gray-200 cursor-not-allowed'
-                                    }`}
+                                      }`}
                                   >
                                     Apply
                                   </button>
@@ -905,10 +1070,10 @@ export function Checkout() {
 
               <div className="space-y-2 border-t border-gray-100 pt-4">
                 <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-                 {discount > 0 && <div className="flex justify-between text-sm text-emerald-600"><span>Discount</span><span>-{fmt(discount)}</span></div>}
-                 <div className="flex justify-between text-sm text-gray-600"><span>Shipping</span><span>{shippingCost === 0 ? 'Free' : fmt(shippingCost)}</span></div>
-                 <div className="flex justify-between text-sm text-gray-600"><span>GST (18%)</span><span>{fmt(tax)}</span></div>
-                 <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
+                {discount > 0 && <div className="flex justify-between text-sm text-emerald-600"><span>Discount</span><span>-{fmt(discount)}</span></div>}
+                <div className="flex justify-between text-sm text-gray-600"><span>Shipping</span><span>{shippingCost === 0 ? 'Free' : fmt(shippingCost)}</span></div>
+                <div className="flex justify-between text-sm text-gray-600"><span>GST (18%)</span><span>{fmt(tax)}</span></div>
+                <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
               </div>
 
               {/* COD badge in sidebar */}

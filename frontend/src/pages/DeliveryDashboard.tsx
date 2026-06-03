@@ -5,6 +5,9 @@ import { useRouter } from '../lib/router';
 import { useToast } from '../contexts/ToastContext';
 import { deliveryApi, userApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
+import { useLocation } from '../contexts/LocationContext';
+import { RouteMap } from '../components/RouteMap';
+
 
 type Tab = 'overview' | 'active' | 'available' | 'history' | 'profile';
 
@@ -22,6 +25,8 @@ export function DeliveryDashboard() {
   const { user, signOut, loading, refreshUser } = useAuth();
   const { navigate } = useRouter();
   const { toast } = useToast();
+  const { inventoryCoords } = useLocation();
+
   const [tab, setTab] = useState<Tab>('overview');
   const [stats, setStats] = useState<any>({ completedCount: 0, activeCount: 0, totalEarnings: 0, unpaidEarnings: 0, deliveryRatePerKm: 15 });
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
@@ -493,8 +498,25 @@ export function DeliveryDashboard() {
                             </div>
                           </div>
 
+                          {/* RouteMap view */}
+                          {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (
+                            <div className="mb-6 mt-4">
+                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Delivery Location Map</h4>
+                              <RouteMap
+                                startLat={inventoryCoords.lat}
+                                startLng={inventoryCoords.lng}
+                                endLat={order.shippingAddress.latitude}
+                                endLng={order.shippingAddress.longitude}
+                                startName="BLIPZO Warehouse"
+                                endName={order.shippingAddress.fullName || 'Customer Location'}
+                                maxDistanceKm={25}
+                              />
+                            </div>
+                          )}
+
                           {/* Actions Console */}
                           <div className="border-t border-gray-100 pt-5 mt-10 flex flex-wrap gap-3 items-start justify-between">
+
                             <a
                               href={`https://maps.google.com/?q=${encodeURIComponent(`${order.shippingAddress.addressLine1}, ${order.shippingAddress.city}, ${order.shippingAddress.postalCode}`)}`}
                               target="_blank"

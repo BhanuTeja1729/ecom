@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { Badge } from '../components/ui/Badge';
 
+
+
 const STEPS = [
   { status: 'pending', label: 'Placed', icon: Clock, desc: 'Your order has been received and is awaiting confirmation' },
   { status: 'confirmed', label: 'Confirmed', icon: CheckCircle, desc: 'Payment verified and order confirmed' },
@@ -52,6 +54,8 @@ function formatDate(dateStr: string): string {
 export function OrderTracking() {
   const { user } = useAuth();
   const { query, navigate } = useRouter();
+
+
   const [orderNum, setOrderNum] = useState('');
   const [order, setOrder] = useState<any>(null);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -480,10 +484,12 @@ export function OrderTracking() {
                   </div>
                 </div>
               </div>
-            )}
+
+
 
             {/* Status history timeline */}
             {order.statusHistory && order.statusHistory.length > 0 && (
+
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                 <h3 className="font-bold text-gray-900 mb-5 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-amber-500" /> Status Timeline

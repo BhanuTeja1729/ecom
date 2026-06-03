@@ -370,6 +370,8 @@ const addressBodySchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 export async function addAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
