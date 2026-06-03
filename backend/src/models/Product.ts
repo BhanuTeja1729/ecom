@@ -6,6 +6,7 @@ export interface IProductVariant {
   type: string;
   value: string;
   priceModifier: number;
+  comparePriceModifier: number;
   inventory: number;
   sku: string;
   sortOrder: number;
@@ -59,6 +60,7 @@ const ProductVariantSchema = new Schema<IProductVariant>({
   type: { type: String, required: true },
   value: { type: String, required: true },
   priceModifier: { type: Number, default: 0 },
+  comparePriceModifier: { type: Number, default: 0 },
   inventory: { type: Number, default: 0 },
   sku: String,
   sortOrder: { type: Number, default: 0 },

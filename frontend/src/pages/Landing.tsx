@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ArrowRight, Shield, Truck, RotateCcw, Star, Zap, ShoppingBag, Package, Users } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../contexts/AuthContext';
 import { Footer } from '../components/layout/Footer';
-import { productApi } from '../lib/api';
 
 const FEATURES = [
   {
@@ -54,22 +53,10 @@ const TESTIMONIALS = [
 export function Landing() {
   const { navigate } = useRouter();
   const { user, loading } = useAuth();
-  const [stats, setStats] = useState({ products: 0, customers: 0 });
-
-  useEffect(() => {
-    productApi.publicStats().then(res => {
-      if (res.success && res.data) {
-        setStats({
-          products: res.data.products,
-          customers: res.data.customers,
-        });
-      }
-    }).catch(() => { });
-  }, []);
 
   const dynamicStats = [
-    { icon: Users, value: stats.customers > 0 ? `${stats.customers.toLocaleString('en-IN')}+` : '50K+', label: 'Happy Customers' },
-    { icon: Package, value: stats.products > 0 ? `${stats.products.toLocaleString('en-IN')}+` : '500+', label: 'Premium Products' },
+    { icon: Users, value: '50K+', label: 'Happy Customers' },
+    { icon: Package, value: '500+', label: 'Premium Products' },
     { icon: Star, value: '4.9★', label: 'Average Rating' },
     { icon: ShoppingBag, value: '99%', label: 'Satisfaction Rate' },
   ];
@@ -165,7 +152,7 @@ export function Landing() {
               Luxury
             </h1>
             <p className="text-gray-400 text-lg leading-relaxed mb-10 max-w-lg">
-              Discover {stats.products > 0 ? `${stats.products}+` : '500+'} curated premium products. From cutting-edge electronics to exclusive lifestyle items — all in one place, just for you.
+              Discover 500+ curated premium products. From cutting-edge electronics to exclusive lifestyle items — all in one place, just for you.
             </p>
             <div className="flex flex-wrap gap-4">
               <button
@@ -194,7 +181,7 @@ export function Landing() {
               </div>
               <div>
                 <div className="flex text-amber-400 text-sm">★★★★★</div>
-                <p className="text-gray-400 text-xs mt-0.5">Loved by {stats.customers > 0 ? `${stats.customers.toLocaleString('en-IN')}+` : '50,000+'} customers</p>
+                <p className="text-gray-400 text-xs mt-0.5">Loved by 50,000+ customers</p>
               </div>
             </div>
           </div>
@@ -229,7 +216,7 @@ export function Landing() {
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-40 h-40 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex flex-col items-center justify-center shadow-2xl shadow-amber-500/40">
                   <ShoppingBag className="w-10 h-10 text-white mb-2" />
-                  <p className="text-white font-black text-lg">{stats.products > 0 ? `${stats.products}+` : '500+'}</p>
+                  <p className="text-white font-black text-lg">500+</p>
                   <p className="text-amber-100 text-xs">Products</p>
                 </div>
               </div>
@@ -373,7 +360,7 @@ export function Landing() {
             Create Account
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
-          <p className="text-gray-500 text-sm mt-4">No credit card required. Join {stats.customers > 0 ? `${stats.customers.toLocaleString('en-IN')}+` : '50,000+'} happy customers.</p>
+          <p className="text-gray-500 text-sm mt-4">No credit card required. Join 50,000+ happy customers.</p>
         </div>
       </section>
 

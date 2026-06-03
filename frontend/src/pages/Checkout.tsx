@@ -252,7 +252,7 @@ export function Checkout() {
   }, [user]);
 
   const shippingCost = subtotal >= 999 ? 0 : 49;
-  const tax = Math.round(total * 0.18);
+  const tax = subtotal > 199 ? 0 : Math.round(total * 0.18);
   const orderTotal = total + shippingCost + tax;
   const fmt = (p: number) => '₹' + p.toLocaleString('en-IN');
 
@@ -1071,8 +1071,24 @@ export function Checkout() {
               <div className="space-y-2 border-t border-gray-100 pt-4">
                 <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
                 {discount > 0 && <div className="flex justify-between text-sm text-emerald-600"><span>Discount</span><span>-{fmt(discount)}</span></div>}
-                <div className="flex justify-between text-sm text-gray-600"><span>Shipping</span><span>{shippingCost === 0 ? 'Free' : fmt(shippingCost)}</span></div>
-                <div className="flex justify-between text-sm text-gray-600"><span>GST (18%)</span><span>{fmt(tax)}</span></div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Shipping</span>
+                  <span>{shippingCost === 0 ? <span className="text-emerald-600 font-semibold">Free</span> : fmt(shippingCost)}</span>
+                </div>
+                {subtotal < 999 && (
+                  <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg mt-1 font-medium">
+                    Add {fmt(999 - subtotal)} more for free shipping!
+                  </p>
+                )}
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Handling Fee</span>
+                  <span>{tax === 0 ? <span className="text-emerald-600 font-semibold">Free</span> : fmt(tax)}</span>
+                </div>
+                {subtotal <= 199 && (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg mt-1 font-medium">
+                    Add {fmt(200 - subtotal)} more for free handling fee!
+                  </p>
+                )}
                 <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
               </div>
 

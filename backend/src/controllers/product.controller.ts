@@ -38,6 +38,7 @@ const productSchema = z.object({
     type: z.string(),
     value: z.string(),
     priceModifier: z.number().default(0),
+    comparePriceModifier: z.number().default(0),
     inventory: z.number().int().default(0),
     sku: z.string().optional(),
     sortOrder: z.number().default(0),

@@ -4,22 +4,10 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { authApi, productApi } from '../lib/api';
+import { authApi } from '../lib/api';
 
 export function Auth() {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot-password'>('login');
-  const [stats, setStats] = useState({ products: 0, customers: 0 });
-
-  useEffect(() => {
-    productApi.publicStats().then(res => {
-      if (res.success && res.data) {
-        setStats({
-          products: res.data.products,
-          customers: res.data.customers,
-        });
-      }
-    }).catch(() => {});
-  }, []);
   const [role, setRole] = useState<'customer' | 'delivery_partner'>('customer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -215,13 +203,13 @@ export function Auth() {
             Premium Shopping,<br />Reimagined
           </h2>
           <p className="text-gray-400 leading-relaxed max-w-sm">
-            Join {stats.customers > 0 ? `${stats.customers.toLocaleString('en-IN')}+` : '50,000+'} members enjoying exclusive deals, early access to new products, and a world-class shopping experience.
+            Join 50,000+ members enjoying exclusive deals, early access to new products, and a world-class shopping experience.
           </p>
           <div className="grid grid-cols-3 gap-4 mt-10">
             {[
-              { value: stats.customers > 0 ? `${stats.customers.toLocaleString('en-IN')}+` : '50K+', label: 'Members' },
+              { value: '50K+', label: 'Members' },
               { value: '4.9★', label: 'Rating' },
-              { value: stats.products > 0 ? `${stats.products}+` : '500+', label: 'Products' },
+              { value: '500+', label: 'Products' },
             ].map(({ value, label }) => (
               <div key={label} className="bg-white/10 rounded-2xl p-4">
                 <p className="text-white font-black text-xl">{value}</p>

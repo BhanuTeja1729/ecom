@@ -131,7 +131,8 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       }
     }
 
-    const shippingAmount = 99; // Fixed shipping for now
+    const calculatedSubtotal = orderItems.reduce((s, i) => s + i.total, 0);
+    const shippingAmount = calculatedSubtotal >= 999 ? 0 : 49;
     const { subtotal, taxAmount, total } = calculateOrderTotals(
       orderItems.map((i) => ({ price: i.price, quantity: i.quantity })),
       discountAmount,

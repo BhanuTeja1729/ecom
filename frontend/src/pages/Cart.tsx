@@ -48,7 +48,7 @@ export function Cart() {
   }
 
   const shipping = subtotal >= 999 ? 0 : 49;  // INR thresholds
-  const tax = Math.round(total * 0.18);  // 18% GST
+  const tax = subtotal > 199 ? 0 : Math.round(total * 0.18);  // 18% Handling fee (free above 199)
   const orderTotal = total + shipping + tax;
   const fmt = (p: number) => '₹' + p.toLocaleString('en-IN');
 
@@ -196,11 +196,14 @@ export function Cart() {
                   </p>
                 )}
                 <div className="flex justify-between text-sm text-gray-600">
-                  <span>GST (18%)</span>
+                  <span>Handling Fee</span>
+                  <span>{tax === 0 ? <span className="text-emerald-600 font-semibold">Free</span> : fmt(tax)}</span>
                 </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Tax</span><span>{fmt(tax)}</span>
-                </div>
+                {subtotal <= 199 && (
+                  <p className="text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg mt-1 font-medium">
+                    Add {fmt(200 - subtotal)} more for free handling fee!
+                  </p>
+                )}
                 <div className="flex justify-between font-black text-gray-900 text-lg pt-3 border-t border-gray-200">
                   <span>Total</span>
                   <span>{fmt(orderTotal)}</span>

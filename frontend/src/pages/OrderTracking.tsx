@@ -576,11 +576,10 @@ export function OrderTracking() {
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Shipping</span><span>{order.shippingAmount === 0 ? <span className="text-emerald-600 font-bold">Free</span> : fmt(order.shippingAmount)}</span>
                 </div>
-                {order.taxAmount > 0 && (
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>Tax</span><span>{fmt(order.taxAmount)}</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Handling Fee</span>
+                  <span>{order.taxAmount === 0 ? <span className="text-emerald-600 font-semibold">Free</span> : fmt(order.taxAmount)}</span>
+                </div>
                 <div className="flex justify-between font-black text-gray-900 text-lg pt-3 border-t border-gray-200">
                   <span>Total</span><span>{fmt(order.total)}</span>
                 </div>

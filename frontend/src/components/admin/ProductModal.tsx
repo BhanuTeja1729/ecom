@@ -15,6 +15,7 @@ const EMPTY = {
   price: '', comparePrice: '', inventory: '0', lowStockThreshold: '5',
   category: '', tags: '', isFeatured: false, isActive: true,
   images: [{ url: '', altText: '', isPrimary: true, sortOrder: 0 }],
+  variants: [],
 };
 
 export function ProductModal({ product, categories, onSave, onClose, onAddCategory }: Props) {
@@ -85,6 +86,18 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
         images: product.images?.length
           ? product.images.map((i: any) => ({ url: i.url, altText: i.altText ?? '', isPrimary: i.isPrimary, sortOrder: i.sortOrder }))
           : [{ url: '', altText: '', isPrimary: true, sortOrder: 0 }],
+        variants: (product.variants || product.product_variants)?.length
+          ? (product.variants || product.product_variants).map((v: any) => ({
+              name: v.name ?? 'Size',
+              type: v.type ?? v.name ?? 'Size',
+              value: v.value ?? '',
+              priceModifier: String((product.price ?? 0) + (v.priceModifier ?? v.price_modifier ?? 0)),
+              comparePriceModifier: String((product.comparePrice ?? product.compare_price ?? 0) + (v.comparePriceModifier ?? v.compare_price_modifier ?? 0)),
+              inventory: String(v.inventory ?? 0),
+              sku: v.sku ?? '',
+              sortOrder: v.sortOrder ?? 0,
+            }))
+          : [],
       });
     } else {
       setForm(EMPTY);
@@ -142,29 +155,83 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
   const removeImg = (i: number) =>
     setForm((p: any) => ({ ...p, images: p.images.filter((_: any, idx: number) => idx !== i) }));
 
+  const addVariant = () =>
+    setForm((p: any) => ({
+      ...p,
+      variants: [...(p.variants || []), { name: 'Size', type: 'Size', value: '', priceModifier: '0', comparePriceModifier: '0', inventory: '0', sku: '', sortOrder: p.variants?.length ?? 0 }],
+    }));
+
+  const removeVariant = (i: number) =>
+    setForm((p: any) => ({ ...p, variants: p.variants.filter((_: any, idx: number) => idx !== i) }));
+
+  const updateVariant = (i: number, k: string, v: any) =>
+    setForm((p: any) => {
+      const varts = [...(p.variants || [])];
+      varts[i] = { ...varts[i], [k]: v };
+      if (k === 'name') {
+        varts[i].type = v;
+      }
+      return { ...p, variants: varts };
+    });
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!form.name.trim() || !form.description.trim() || !form.price) {
-      setError('Name, description and price are required.');
+    const hasVariants = (form.variants || []).length > 0;
+    if (!form.name.trim() || !form.description.trim()) {
+      setError('Name and description are required.');
+      return;
+    }
+    if (!hasVariants && !form.price) {
+      setError('Price is required.');
       return;
     }
     setSaving(true);
     try {
+      let finalPrice = parseFloat(form.price) || 0;
+      let finalComparePrice = form.comparePrice ? parseFloat(form.comparePrice) : undefined;
+      let finalInventory = parseInt(form.inventory) || 0;
+      let cleanedVariants = [];
+
+      if (hasVariants) {
+        // First variant's absolute price becomes the base product price
+        const basePrice = parseFloat(form.variants[0].priceModifier) || 0;
+        const baseComparePrice = parseFloat(form.variants[0].comparePriceModifier) || 0;
+        finalPrice = basePrice;
+        finalComparePrice = baseComparePrice > 0 ? baseComparePrice : undefined;
+        finalInventory = form.variants.reduce((acc: number, v: any) => acc + (parseInt(v.inventory) || 0), 0);
+
+        cleanedVariants = form.variants.map((v: any, idx: number) => {
+          const varPrice = parseFloat(v.priceModifier) || 0;
+          const varComparePrice = parseFloat(v.comparePriceModifier) || 0;
+          return {
+            name: v.name.trim() || 'Size',
+            type: v.type.trim() || v.name.trim() || 'Size',
+            value: v.value.trim(),
+            priceModifier: varPrice - basePrice, // store relative difference in database
+            comparePriceModifier: varComparePrice - baseComparePrice, // store relative difference in database
+            inventory: parseInt(v.inventory) || 0,
+            sku: v.sku?.trim() || undefined,
+            sortOrder: parseInt(v.sortOrder) || idx,
+          };
+        });
+      }
+
       await onSave({
         name: form.name.trim(),
         description: form.description.trim(),
         shortDescription: form.shortDescription.trim(),
         sku: form.sku.trim() || undefined,
-        price: parseFloat(form.price),
-        comparePrice: form.comparePrice ? parseFloat(form.comparePrice) : undefined,
-        inventory: parseInt(form.inventory) || 0,
+        price: finalPrice,
+        comparePrice: finalComparePrice,
+        inventory: finalInventory,
         lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
         category: form.category || undefined,
         tags: form.tags.split(',').map((t: string) => t.trim()).filter(Boolean),
         isFeatured: form.isFeatured,
         isActive: form.isActive,
         images: form.images.filter((i: any) => i.url.trim()),
+        variants: cleanedVariants,
       });
     } catch (err: any) {
       setError(err.message || 'Save failed');
@@ -174,6 +241,7 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
 
   const label = 'block text-xs font-semibold text-gray-600 mb-1';
   const input = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent';
+  const hasVariants = (form.variants || []).length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -196,63 +264,72 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
               <label className={label}>Product Name *</label>
               <input className={input} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Premium Wireless Headphones" />
             </div>
-            <div>
-              <label className={label}>MRP / Main Price (₹) *</label>
-              <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => {
-                const mrp = e.target.value;
-                set('comparePrice', mrp);
-                // Auto-calculate selling price from MRP and discount
-                const disc = parseFloat(form.discountPercent);
-                const mrpNum = parseFloat(mrp);
-                if (mrpNum > 0 && disc > 0 && disc < 100) {
-                  set('price', String(Math.round(mrpNum * (1 - disc / 100))));
-                } else if (mrpNum > 0) {
-                  set('price', mrp); // No discount → selling = MRP
-                }
-              }} placeholder="320" />
-            </div>
-            <div>
-              <label className={label}>Discount %</label>
-              <div className="relative">
-                <input type="number" min={0} max={99} step={1} className={input + ' pr-8'} value={form.discountPercent ?? (() => {
-                  // Auto-calculate from existing price/comparePrice
-                  const p = parseFloat(form.price);
-                  const cp = parseFloat(form.comparePrice);
-                  if (cp > 0 && p > 0 && cp > p) return String(Math.round(((cp - p) / cp) * 100));
-                  return '';
-                })()} onChange={e => {
-                  const disc = e.target.value;
-                  set('discountPercent', disc);
-                  const mrp = parseFloat(form.comparePrice);
-                  if (mrp > 0 && parseFloat(disc) > 0 && parseFloat(disc) < 100) {
-                    set('price', String(Math.round(mrp * (1 - parseFloat(disc) / 100))));
-                  } else if (mrp > 0) {
-                    set('price', String(Math.round(mrp))); // 0% discount → selling = MRP
-                  }
-                }} placeholder="10" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">%</span>
+            {!hasVariants ? (
+              <>
+                <div>
+                  <label className={label}>MRP / Main Price (₹) *</label>
+                  <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => {
+                    const mrp = e.target.value;
+                    set('comparePrice', mrp);
+                    // Auto-calculate selling price from MRP and discount if no variants
+                    const disc = parseFloat(form.discountPercent);
+                    const mrpNum = parseFloat(mrp);
+                    if (mrpNum > 0 && disc > 0 && disc < 100) {
+                      set('price', String(Math.round(mrpNum * (1 - disc / 100))));
+                    } else if (mrpNum > 0) {
+                      set('price', mrp); // No discount → selling = MRP
+                    }
+                  }} placeholder="320" />
+                </div>
+                <div>
+                  <label className={label}>Discount %</label>
+                  <div className="relative">
+                    <input type="number" min={0} max={99} step={1} className={input + ' pr-8'} value={form.discountPercent ?? (() => {
+                      // Auto-calculate from existing price/comparePrice
+                      const p = parseFloat(form.price);
+                      const cp = parseFloat(form.comparePrice);
+                      if (cp > 0 && p > 0 && cp > p) return String(Math.round(((cp - p) / cp) * 100));
+                      return '';
+                    })()} onChange={e => {
+                      const disc = e.target.value;
+                      set('discountPercent', disc);
+                      const mrp = parseFloat(form.comparePrice);
+                      if (mrp > 0 && parseFloat(disc) > 0 && parseFloat(disc) < 100) {
+                        set('price', String(Math.round(mrp * (1 - parseFloat(disc) / 100))));
+                      } else if (mrp > 0) {
+                        set('price', String(Math.round(mrp))); // 0% discount → selling = MRP
+                      }
+                    }} placeholder="10" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Selling Price (₹)</label>
+                  <input type="number" min={0} className={input + ' bg-gray-50 font-bold text-emerald-700'} value={form.price} onChange={e => {
+                    const sp = e.target.value;
+                    set('price', sp);
+                    // Auto-update discount % from MRP and new selling price
+                    const mrp = parseFloat(form.comparePrice);
+                    const spNum = parseFloat(sp);
+                    if (mrp > 0 && spNum > 0 && mrp > spNum) {
+                      set('discountPercent', String(Math.round(((mrp - spNum) / mrp) * 100)));
+                    } else {
+                      set('discountPercent', '');
+                    }
+                  }} placeholder="289" />
+                  {parseFloat(form.comparePrice) > 0 && parseFloat(form.price) > 0 && parseFloat(form.comparePrice) > parseFloat(form.price) && (
+                    <p className="text-[11px] text-amber-600 font-semibold mt-1">
+                      You save ₹{(parseFloat(form.comparePrice) - parseFloat(form.price)).toLocaleString('en-IN')} ({Math.round(((parseFloat(form.comparePrice) - parseFloat(form.price)) / parseFloat(form.comparePrice)) * 100)}% off)
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-3 bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex items-center justify-between text-xs text-amber-800 animate-in fade-in duration-200">
+                <span className="font-medium">MRP, selling prices and stock are managed individually per product parameter below.</span>
+                <span className="font-semibold px-2 py-0.5 bg-amber-100 rounded-md">{form.variants.length} Parameter(s) Added</span>
               </div>
-            </div>
-            <div>
-              <label className={label}>Selling Price (₹)</label>
-              <input type="number" min={0} className={input + ' bg-gray-50 font-bold text-emerald-700'} value={form.price} onChange={e => {
-                const sp = e.target.value;
-                set('price', sp);
-                // Auto-update discount % from MRP and new selling price
-                const mrp = parseFloat(form.comparePrice);
-                const spNum = parseFloat(sp);
-                if (mrp > 0 && spNum > 0 && mrp > spNum) {
-                  set('discountPercent', String(Math.round(((mrp - spNum) / mrp) * 100)));
-                } else {
-                  set('discountPercent', '');
-                }
-              }} placeholder="289" />
-              {parseFloat(form.comparePrice) > 0 && parseFloat(form.price) > 0 && parseFloat(form.comparePrice) > parseFloat(form.price) && (
-                <p className="text-[11px] text-amber-600 font-semibold mt-1">
-                  You save ₹{(parseFloat(form.comparePrice) - parseFloat(form.price)).toLocaleString('en-IN')} ({Math.round(((parseFloat(form.comparePrice) - parseFloat(form.price)) / parseFloat(form.comparePrice)) * 100)}% off)
-                </p>
-              )}
-            </div>
+            )}
             <div>
               <label className={label}>SKU</label>
               <input className={input} value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="ABC-123" />
@@ -279,10 +356,22 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
                 ))}
               </select>
             </div>
-            <div>
-              <label className={label}>Stock</label>
-              <input type="number" min={0} className={input} value={form.inventory} onChange={e => set('inventory', e.target.value)} />
-            </div>
+            {!((form.variants || []).length > 0) ? (
+              <div>
+                <label className={label}>Stock</label>
+                <input type="number" min={0} className={input} value={form.inventory} onChange={e => set('inventory', e.target.value)} />
+              </div>
+            ) : (
+              <div>
+                <label className={label}>Total Stock (Auto)</label>
+                <input
+                  type="text"
+                  disabled
+                  className={input + ' bg-gray-50 text-gray-500 font-bold'}
+                  value={(form.variants || []).reduce((acc: number, v: any) => acc + (parseInt(v.inventory) || 0), 0)}
+                />
+              </div>
+            )}
             <div>
               <label className={label}>Low-Stock Alert At</label>
               <input type="number" min={0} className={input} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', e.target.value)} />
@@ -301,6 +390,109 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
           <div>
             <label className={label}>Tags (comma-separated)</label>
             <input className={input} value={form.tags} onChange={e => set('tags', e.target.value)} placeholder="wireless, audio, headphones" />
+          </div>
+
+          {/* Parameters / Variants */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="block text-sm font-black text-gray-900">Product Parameters / Variants</label>
+                <p className="text-xs text-gray-500 mt-0.5">Add attributes like size (e.g. 50g, 2L, 325ml) or price/stock adjustments.</p>
+              </div>
+              <button
+                type="button"
+                onClick={addVariant}
+                className="text-xs text-amber-600 font-semibold flex items-center gap-1 hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Parameter
+              </button>
+            </div>
+
+            {(form.variants || []).length > 0 ? (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {(form.variants || []).map((v: any, i: number) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded-xl border border-gray-100 relative group animate-in slide-in-from-top-2 duration-150">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Type / Group</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.name}
+                        onChange={e => updateVariant(i, 'name', e.target.value)}
+                        placeholder="e.g. Size"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Value *</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.value}
+                        onChange={e => updateVariant(i, 'value', e.target.value)}
+                        placeholder="e.g. 20g"
+                        required
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">MRP (₹) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.comparePriceModifier}
+                        onChange={e => updateVariant(i, 'comparePriceModifier', e.target.value)}
+                        placeholder="e.g. 100"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Price (₹) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold text-emerald-700"
+                        value={v.priceModifier}
+                        onChange={e => updateVariant(i, 'priceModifier', e.target.value)}
+                        placeholder="e.g. 60"
+                      />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Stock</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.inventory}
+                        onChange={e => updateVariant(i, 'inventory', e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">SKU</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.sku}
+                        onChange={e => updateVariant(i, 'sku', e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="sm:col-span-1 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(i)}
+                        className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors mt-4 shrink-0"
+                        title="Delete parameter"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
+                No custom parameters or variants defined yet. Click "Add Parameter" above to set weights, volumes, sizes, etc.
+              </div>
+            )}
           </div>
 
           {/* Images */}
