@@ -35,8 +35,7 @@ export interface IOrder extends Document {
   billingAddress?: IAddress;
   paymentMethod?: string;
   paymentIntentId?: string;
-  razorpayOrderId?: string;
-  razorpayPaymentId?: string;
+  deliveryCode?: string;       // 6-digit COD verification code (set when shipped)
   notes?: string;
   trackingNumber?: string;
   scheduledDeliveryDate?: Date;
@@ -48,6 +47,8 @@ export interface IOrder extends Document {
   deliveryDistanceKm?: number;
   deliveryPayout?: number;
   deliveryPayoutStatus?: 'unpaid' | 'paid';
+  codAmount?: number;            // Cash amount collected from customer on delivery
+  codCashStatus?: 'with_partner' | 'remitted' | 'not_applicable'; // Tracks cash remittance back to admin
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,8 +88,7 @@ const OrderSchema = new Schema<IOrder>({
   billingAddress: AddressSchema,
   paymentMethod: String,
   paymentIntentId: String,
-  razorpayOrderId: String,
-  razorpayPaymentId: String,
+  deliveryCode: String,         // 6-digit delivery verification code
   notes: String,
   trackingNumber: String,
   scheduledDeliveryDate: Date,
@@ -100,6 +100,8 @@ const OrderSchema = new Schema<IOrder>({
   deliveryDistanceKm: Number,
   deliveryPayout: Number,
   deliveryPayoutStatus: { type: String, enum: ['unpaid', 'paid'], default: 'unpaid' },
+  codAmount: Number,
+  codCashStatus: { type: String, enum: ['with_partner', 'remitted', 'not_applicable'], default: 'not_applicable' },
 }, { timestamps: true });
 
 OrderSchema.index({ user: 1 });

@@ -25,11 +25,9 @@ const addressSchema = z.object({
 const checkoutSchema = z.object({
   shippingAddress: addressSchema,
   billingAddress: addressSchema.optional(),
-  paymentMethod: z.string(),
+  paymentMethod: z.string().default('cod'),
   couponCode: z.string().optional(),
   notes: z.string().optional(),
-  razorpayPaymentId: z.string().optional(),
-  razorpayOrderId: z.string().optional(),
   scheduledDeliveryDate: z.string().optional(),
   scheduledDeliverySlot: z.string().optional(),
   deliveryDistance: z.number().optional(),
@@ -141,6 +139,7 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
     const deliveryDistance = data.deliveryDistance ?? 0;
     const deliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
+    // COD orders are confirmed immediately — payment collected on delivery
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       user: req.user?.id,
@@ -154,17 +153,19 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       couponCode,
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
-      paymentMethod: data.paymentMethod,
-      status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending',
-      paymentStatus: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'paid' : 'pending',
-      razorpayPaymentId: data.razorpayPaymentId,
-      razorpayOrderId: data.razorpayOrderId,
+      paymentMethod: 'cod',
+      status: 'confirmed',
+      paymentStatus: 'pending', // Collected on delivery
       scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
       scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
       deliveryDistanceKm: deliveryDistance,
       deliveryPayout,
-      statusHistory: [{ status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending', message: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? (data.paymentMethod === 'test_bypass' ? 'Test order — payment bypassed' : 'Payment received via Razorpay') : 'Order placed', timestamp: new Date() }],
+      statusHistory: [{
+        status: 'confirmed',
+        message: 'Order placed successfully. Pay cash on delivery.',
+        timestamp: new Date(),
+      }],
     });
 
     // Reduce inventory

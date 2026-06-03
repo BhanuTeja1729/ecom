@@ -229,6 +229,24 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
                 0
               ]
             }
+          },
+          cashInHand: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'with_partner'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
+          },
+          cashRemitted: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'remitted'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
           }
         },
       },
@@ -243,6 +261,8 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
       activeDeliveries: statsMap[p._id.toString()]?.activeCount ?? 0,
       totalEarnings: statsMap[p._id.toString()]?.totalEarnings ?? 0,
       unpaidEarnings: statsMap[p._id.toString()]?.unpaidEarnings ?? 0,
+      cashInHand: statsMap[p._id.toString()]?.cashInHand ?? 0,
+      cashRemitted: statsMap[p._id.toString()]?.cashRemitted ?? 0,
     }));
 
     res.json({ success: true, data });
@@ -423,6 +443,52 @@ export async function payDeliveryPartnerSalary(req: Request, res: Response, next
       success: true,
       message: `Salary paid successfully. Updated ${result.modifiedCount} orders.`,
       modifiedCount: result.modifiedCount
+    });
+  } catch (err) { next(err); }
+}
+
+// ─── Admin: Record COD Cash Remittance ──────────────────────────────────────
+
+export async function recordRemittance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.params.id;
+    const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    // Find all orders where this partner is still holding the customer's COD cash
+    const pendingOrders = await Order.find({
+      assignedDeliveryPartner: partnerId,
+      status: 'delivered',
+      codCashStatus: 'with_partner',
+    });
+
+    if (pendingOrders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending COD cash remittance found for this partner.',
+        remittedCount: 0,
+        totalCash: 0,
+      });
+    }
+
+    // Calculate the total cash being remitted
+    const totalCash = pendingOrders.reduce((sum, o) => sum + (o.codAmount ?? o.total ?? 0), 0);
+
+    // Mark all as remitted
+    const result = await Order.updateMany(
+      {
+        assignedDeliveryPartner: partnerId,
+        status: 'delivered',
+        codCashStatus: 'with_partner',
+      },
+      { $set: { codCashStatus: 'remitted' } }
+    );
+
+    res.json({
+      success: true,
+      message: `Cash remittance recorded. ${result.modifiedCount} order(s) cleared, total ₹${totalCash}.`,
+      remittedCount: result.modifiedCount,
+      totalCash,
     });
   } catch (err) { next(err); }
 }

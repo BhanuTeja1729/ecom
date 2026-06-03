@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload, Tag, Download } from 'lucide-react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload, Tag, Download, Banknote } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { useToast } from '../contexts/ToastContext';
@@ -654,6 +654,22 @@ export function Admin() {
       }
     } catch (err: any) {
       toast(err.message || 'Failed to pay salary', 'error');
+    }
+  }
+
+  async function handleRecordRemittance(partner: any) {
+    if ((partner.cashInHand ?? 0) <= 0) return;
+    const confirmRemit = window.confirm(`Record cash remittance from ${partner.fullName}?\n\nThis confirms you have physically received ₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} in COD cash from this delivery partner.`);
+    if (!confirmRemit) return;
+
+    try {
+      const res = await adminApi.recordRemittance(partner._id);
+      if (res.success) {
+        toast(`₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} COD cash remittance recorded for ${partner.fullName}!`, 'success');
+        fetchDeliveryPartners();
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to record remittance', 'error');
     }
   }
 
@@ -1380,11 +1396,12 @@ export function Admin() {
               </div>
 
               {partners.length > 0 && (
-                <div className="grid grid-cols-3 gap-px bg-gray-100 border-b border-gray-100">
+                <div className="grid grid-cols-4 gap-px bg-gray-100 border-b border-gray-100">
                   {[
                     { label: 'Total Partners', value: partners.length, color: 'text-gray-900' },
-                    { label: 'Total Deliveries', value: partners.reduce((s, p) => s + (p.completedDeliveries ?? 0), 0), color: 'text-blue-600' },
-                    { label: 'Total Earnings Paid', value: `₹${partners.reduce((s, p) => s + (p.totalEarnings ?? 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-600' },
+                    { label: 'Total Deliveries', value: partners.reduce((s: number, p: any) => s + (p.completedDeliveries ?? 0), 0), color: 'text-blue-600' },
+                    { label: 'Total Earnings Paid', value: `₹${partners.reduce((s: number, p: any) => s + (p.totalEarnings ?? 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-600' },
+                    { label: 'COD Cash Outstanding', value: `₹${partners.reduce((s: number, p: any) => s + (p.cashInHand ?? 0), 0).toLocaleString('en-IN')}`, color: partners.some((p: any) => (p.cashInHand ?? 0) > 0) ? 'text-orange-600' : 'text-gray-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-white p-4 text-center">
                       <p className="text-xs text-gray-500 font-semibold mb-1">{label}</p>
@@ -1422,14 +1439,17 @@ export function Admin() {
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
                         <PartnerHeader columnKey="totalEarnings" title="Earnings" />
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-36">
+                        COD Cash
+                      </th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-28">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {partnersLoading ? (
+                       {partnersLoading ? (
                       [1,2,3].map(i => (
                         <tr key={i}>
-                          {[1,2,3,4,5,6,7,8].map(j => (
+                          {[1,2,3,4,5,6,7,8,9].map(j => (
                             <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
                           ))}
                         </tr>
@@ -1482,6 +1502,19 @@ export function Admin() {
                             <span className="text-[9px] text-gray-400 block">Total: ₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
                           </div>
                         </td>
+                        {/* COD Cash in Hand column */}
+                        <td className="px-4 py-3">
+                          {(p.cashInHand ?? 0) > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black rounded-lg border border-orange-200">
+                                <Banknote className="w-3 h-3" />₹{(p.cashInHand ?? 0).toLocaleString('en-IN')}
+                              </span>
+                              <span className="text-[9px] text-gray-400">Remitted: ₹{(p.cashRemitted ?? 0).toLocaleString('en-IN')}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-400">₹{(p.cashRemitted ?? 0).toLocaleString('en-IN')} remitted</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <button
@@ -1503,13 +1536,21 @@ export function Admin() {
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
-                            <button
+                             <button
                               onClick={() => handlePaySalary(p)}
                               disabled={(p.unpaidEarnings ?? 0) <= 0}
-                              title="Pay Salary"
+                              title="Pay Delivery Salary"
                               className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${(p.unpaidEarnings ?? 0) > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'}`}
                             >
                               <IndianRupee className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRecordRemittance(p)}
+                              disabled={(p.cashInHand ?? 0) <= 0}
+                              title={`Record COD Remittance${(p.cashInHand ?? 0) > 0 ? ` (₹${(p.cashInHand ?? 0).toLocaleString('en-IN')})` : ''}`}
+                              className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${(p.cashInHand ?? 0) > 0 ? 'border-orange-300 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'}`}
+                            >
+                              <Banknote className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setDeletePartnerTarget(p)}

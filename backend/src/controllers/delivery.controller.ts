@@ -5,6 +5,11 @@ import { Order } from '../models/Order';
 import { createError } from '../middleware/error';
 import { getSettingValue } from '../models/Setting';
 
+/** Generate a cryptographically-random 6-digit delivery verification code */
+function generateDeliveryCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // 1. Get available orders (unassigned orders that are confirmed or processing)
 export async function getAvailableOrders(req: Request, res: Response, next: NextFunction) {
   try {
@@ -88,7 +93,9 @@ export async function claimOrder(req: Request & { user?: any }, res: Response, n
   }
 }
 
-// 4. Update order delivery status (e.g. from processing -> shipped (out for delivery) -> delivered)
+// 4. Update order delivery status (processing → shipped → delivered via code verification)
+//    When transitioning to 'shipped', a 6-digit delivery verification code is generated.
+//    To mark 'delivered', use the verifyDeliveryCode endpoint instead.
 export async function updateDeliveryStatus(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const partnerId = req.user?.id;
@@ -96,7 +103,7 @@ export async function updateDeliveryStatus(req: Request & { user?: any }, res: R
 
     const { id } = req.params;
     const { status, message } = z.object({
-      status: z.enum(['processing', 'shipped', 'delivered']),
+      status: z.enum(['processing', 'shipped']),
       message: z.string().optional()
     }).parse(req.body);
 
@@ -109,15 +116,13 @@ export async function updateDeliveryStatus(req: Request & { user?: any }, res: R
     }
 
     order.status = status;
-    
+
     let defaultMsg = '';
     if (status === 'shipped') {
       order.shippedAt = new Date();
-      defaultMsg = 'Order is picked up and is out for delivery.';
-    } else if (status === 'delivered') {
-      order.deliveredAt = new Date();
-      order.paymentStatus = 'paid'; // Assumed paid upon delivery if COD, or already paid
-      defaultMsg = 'Order delivered successfully.';
+      // Generate a fresh 6-digit delivery verification code
+      order.deliveryCode = generateDeliveryCode();
+      defaultMsg = 'Order picked up and is out for delivery. Share the delivery code with the agent to confirm receipt.';
     } else {
       defaultMsg = 'Order status updated by delivery partner.';
     }
@@ -136,7 +141,58 @@ export async function updateDeliveryStatus(req: Request & { user?: any }, res: R
   }
 }
 
-// 5. Get delivery partner statistics (earnings, active delivery count, completed delivery count)
+// 5. Verify the 6-digit delivery code and mark order as delivered (COD confirmation)
+export async function verifyDeliveryCode(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.user?.id;
+    if (!partnerId) throw createError('Unauthorized access', 401);
+
+    const { id } = req.params;
+    const { code } = z.object({ code: z.string().length(6) }).parse(req.body);
+
+    const order = await Order.findById(id);
+    if (!order) throw createError('Order not found', 404);
+
+    // Guard: Only allow the assigned partner or an admin
+    if (order.assignedDeliveryPartner?.toString() !== partnerId && req.user?.role !== 'admin') {
+      throw createError('You are not authorized to verify this delivery', 403);
+    }
+
+    if (order.status !== 'shipped') {
+      throw createError('Order must be in "shipped" status to verify delivery', 400);
+    }
+
+    if (!order.deliveryCode) {
+      throw createError('No delivery code found for this order', 400);
+    }
+
+    if (order.deliveryCode !== code) {
+      throw createError('Invalid delivery code. Please ask the customer for the correct code.', 400);
+    }
+
+    // Code matches — mark as delivered
+    order.status = 'delivered';
+    order.deliveredAt = new Date();
+    order.paymentStatus = 'paid'; // Cash collected on delivery
+    order.deliveryCode = undefined; // Clear the code after use
+    order.codAmount = order.total;  // Record the cash amount collected from customer
+    order.codCashStatus = 'with_partner'; // Partner now holds this cash — must remit to admin
+
+    order.statusHistory.push({
+      status: 'delivered',
+      message: 'Delivery confirmed with customer verification code. Cash collected.',
+      timestamp: new Date()
+    });
+
+    await order.save();
+
+    res.json({ success: true, data: order });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 6. Get delivery partner statistics (earnings, active delivery count, completed delivery count)
 export async function getDeliveryStats(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const partnerId = req.user?.id;
@@ -198,6 +254,36 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
     // Get flat delivery payout
     const flatDeliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
+    // Cash flow: how much customer cash the partner is currently holding vs. already remitted
+    const cashFlowAggregate = await Order.aggregate([
+      { $match: { assignedDeliveryPartner: partnerMongoId, status: 'delivered' } },
+      {
+        $group: {
+          _id: null,
+          cashInHand: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'with_partner'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
+          },
+          cashRemitted: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'remitted'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
+          }
+        }
+      }
+    ]);
+    const cashInHand = cashFlowAggregate[0]?.cashInHand || 0;
+    const cashRemitted = cashFlowAggregate[0]?.cashRemitted || 0;
+
     res.json({
       success: true,
       data: {
@@ -205,6 +291,8 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         activeCount,
         totalEarnings,
         unpaidEarnings,
+        cashInHand,
+        cashRemitted,
         deliveryRatePerKm: flatDeliveryPayout
       }
     });

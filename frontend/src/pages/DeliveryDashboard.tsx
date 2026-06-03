@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Truck, Calendar, MapPin, User, DollarSign, CheckCircle2, Clock, Phone, Navigation, ArrowRight, LogOut, PackageOpen } from 'lucide-react';
+import { Truck, Calendar, MapPin, User, DollarSign, CheckCircle2, Clock, Phone, Navigation, ArrowRight, LogOut, PackageOpen, KeyRound, AlertCircle, Banknote, SendToBack } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
 import { useToast } from '../contexts/ToastContext';
@@ -29,6 +29,8 @@ export function DeliveryDashboard() {
   const [historyOrders, setHistoryOrders] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [deliveryCodes, setDeliveryCodes] = useState<Record<string, string>>({}); // orderId -> input code
+  const [codeError, setCodeError] = useState<Record<string, string>>({}); // orderId -> error msg
 
   const [profileForm, setProfileForm] = useState({ phone: '', upiId: '' });
   const [savingProfile, setSavingProfile] = useState(false);
@@ -89,6 +91,7 @@ export function DeliveryDashboard() {
     loadStats();
     if (tab === 'overview') {
       loadActiveOrders();
+      loadAvailableOrders();
     } else if (tab === 'active') {
       loadActiveOrders();
     } else if (tab === 'available') {
@@ -115,25 +118,43 @@ export function DeliveryDashboard() {
     }
   }
 
-  // Action: Update Delivery Status (e.g. processing -> shipped -> delivered)
-  async function handleUpdateStatus(orderId: string, status: 'shipped' | 'delivered', orderNumber: string) {
+  // Action: Update Delivery Status (processing -> shipped; 'delivered' is via code verification)
+  async function handleUpdateStatus(orderId: string, status: 'shipped', orderNumber: string) {
     setActionLoading(orderId);
     try {
-      const msg = status === 'shipped'
-        ? 'Order has been picked up and is out for delivery.'
-        : 'Order delivered and verified by delivery agent.';
-
+      const msg = 'Order has been picked up and is out for delivery.';
       const res = await deliveryApi.updateStatus(orderId, status, msg);
       if (res.success) {
-        toast(`Order #${orderNumber} updated to ${status === 'shipped' ? 'Out for Delivery' : 'Delivered'}!`, 'success');
+        toast(`Order #${orderNumber} is now Out for Delivery! Delivery code generated.`, 'success');
         loadStats();
         loadActiveOrders();
-        if (status === 'delivered') {
-          setTab('history');
-        }
       }
     } catch (err: any) {
       toast(err.message || 'Failed to update order status', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Action: Verify 6-digit code and mark as delivered
+  async function handleVerifyCode(orderId: string, orderNumber: string) {
+    const code = deliveryCodes[orderId] ?? '';
+    if (code.length !== 6) {
+      setCodeError(e => ({ ...e, [orderId]: 'Please enter the full 6-digit code.' }));
+      return;
+    }
+    setActionLoading(orderId);
+    setCodeError(e => ({ ...e, [orderId]: '' }));
+    try {
+      const res = await deliveryApi.verifyCode(orderId, code);
+      if (res.success) {
+        toast(`Order #${orderNumber} delivered & verified! Cash collected. ✅`, 'success');
+        loadStats();
+        loadActiveOrders();
+        setTab('history');
+      }
+    } catch (err: any) {
+      setCodeError(e => ({ ...e, [orderId]: err.message || 'Invalid code. Please try again.' }));
     } finally {
       setActionLoading(null);
     }
@@ -238,12 +259,13 @@ export function DeliveryDashboard() {
             {/* ── Tab: Overview ── */}
             {tab === 'overview' && (
               <div className="space-y-8">
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                {/* Stats Grid — 4 cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                   {[
                     { label: 'Pending Salary', value: fmt(stats.unpaidEarnings ?? 0), icon: DollarSign, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: `Total Earned: ${fmt(stats.totalEarnings ?? 0)}` },
                     { label: 'Active Deliveries', value: stats.activeCount ?? 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'In progress shipments' },
                     { label: 'Completed Deliveries', value: stats.completedCount ?? 0, icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-100', desc: 'Successfully delivered' },
+                    { label: 'Cash in Hand', value: fmt(stats.cashInHand ?? 0), icon: Banknote, color: 'text-orange-600', bg: 'bg-orange-50', border: stats.cashInHand > 0 ? 'border-orange-300' : 'border-orange-100', desc: stats.cashInHand > 0 ? '⚠️ Pending remittance to store' : `Remitted: ${fmt(stats.cashRemitted ?? 0)}` },
                   ].map(({ label, value, icon: Icon, color, bg, border, desc }) => (
                     <div key={label} className={`bg-white rounded-2xl border ${border} p-6 shadow-sm hover:shadow-md transition-all`}>
                       <div className="flex items-center justify-between mb-4">
@@ -472,7 +494,7 @@ export function DeliveryDashboard() {
                           </div>
 
                           {/* Actions Console */}
-                          <div className="border-t border-gray-100 pt-5 mt-10 flex flex-wrap gap-3 items-center justify-between">
+                          <div className="border-t border-gray-100 pt-5 mt-10 flex flex-wrap gap-3 items-start justify-between">
                             <a
                               href={`https://maps.google.com/?q=${encodeURIComponent(`${order.shippingAddress.addressLine1}, ${order.shippingAddress.city}, ${order.shippingAddress.postalCode}`)}`}
                               target="_blank"
@@ -483,7 +505,7 @@ export function DeliveryDashboard() {
                               Simulate Route
                             </a>
 
-                            <div className="flex gap-2">
+                            <div className="flex flex-col gap-2 items-end">
                               {order.status === 'processing' && (
                                 <button
                                   onClick={() => handleUpdateStatus(order._id, 'shipped', order.orderNumber)}
@@ -499,19 +521,55 @@ export function DeliveryDashboard() {
                                 </button>
                               )}
 
+                              {/* Code verification form for shipped orders */}
                               {order.status === 'shipped' && (
-                                <button
-                                  onClick={() => handleUpdateStatus(order._id, 'delivered', order.orderNumber)}
-                                  disabled={actionLoading === order._id}
-                                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                                >
-                                  {actionLoading === order._id ? (
-                                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                  )}
-                                  Mark as Delivered
-                                </button>
+                                <div className="w-full">
+                                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border-2 border-indigo-200 rounded-xl p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center shrink-0">
+                                        <KeyRound className="w-4 h-4 text-indigo-600" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-black text-indigo-800">Enter Customer's Delivery Code</p>
+                                        <p className="text-xs text-indigo-600">Ask the customer for their 6-digit verification code</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={deliveryCodes[order._id] ?? ''}
+                                        onChange={e => {
+                                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                          setDeliveryCodes(c => ({ ...c, [order._id]: val }));
+                                          setCodeError(err => ({ ...err, [order._id]: '' }));
+                                        }}
+                                        placeholder="Enter 6-digit code"
+                                        className="flex-1 border-2 border-indigo-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-center text-lg font-black tracking-[0.3em] text-indigo-900 outline-none bg-white transition-colors"
+                                      />
+                                      <button
+                                        onClick={() => handleVerifyCode(order._id, order.orderNumber)}
+                                        disabled={actionLoading === order._id || (deliveryCodes[order._id] ?? '').length !== 6}
+                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                                      >
+                                        {actionLoading === order._id ? (
+                                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        )}
+                                        Confirm Delivery
+                                      </button>
+                                    </div>
+
+                                    {codeError[order._id] && (
+                                      <div className="mt-2 flex items-center gap-1.5 text-red-600">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        <p className="text-xs font-semibold">{codeError[order._id]}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -588,7 +646,16 @@ export function DeliveryDashboard() {
             {/* ── Tab: History ── */}
             {tab === 'history' && (
               <div className="space-y-6">
-                <h2 className="text-xl font-black text-gray-900">Delivery History ({historyOrders.length})</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-black text-gray-900">Delivery History ({historyOrders.length})</h2>
+                  {/* Cash summary banner if any pending remittances in history */}
+                  {stats.cashInHand > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-xl">
+                      <Banknote className="w-4 h-4 text-orange-500" />
+                      <span className="text-xs font-bold text-orange-700">{fmt(stats.cashInHand)} pending remittance</span>
+                    </div>
+                  )}
+                </div>
                 {dataLoading ? (
                   <div className="space-y-4">
                     {[1, 2].map(i => <div key={i} className="h-28 bg-white rounded-2xl border border-gray-200 animate-pulse shadow-sm" />)}
@@ -602,11 +669,24 @@ export function DeliveryDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
                     {historyOrders.map((order) => (
-                      <div key={order._id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-emerald-100 transition-colors flex flex-col md:flex-row justify-between md:items-center gap-4">
+                      <div key={order._id} className={`bg-white rounded-2xl border p-5 shadow-sm transition-colors flex flex-col md:flex-row justify-between md:items-center gap-4 ${
+                        order.codCashStatus === 'with_partner' ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-emerald-100'
+                      }`}>
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-gray-900 text-sm">#{order.orderNumber}</span>
                             <Badge variant="success">Delivered</Badge>
+                            {/* COD Cash Status Chip */}
+                            {order.codCashStatus === 'with_partner' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black rounded-full border border-orange-200">
+                                <Banknote className="w-3 h-3" /> Cash Pending Remittance
+                              </span>
+                            )}
+                            {order.codCashStatus === 'remitted' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-full border border-emerald-200">
+                                <SendToBack className="w-3 h-3" /> Cash Remitted
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500">
                             Customer: <span className="font-semibold text-gray-700">{order.shippingAddress.fullName || 'Guest Customer'}</span>
@@ -615,9 +695,21 @@ export function DeliveryDashboard() {
                             Delivered At: {order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('en-IN') : fmtDate(order.updatedAt)}
                           </p>
                         </div>
-                        <div className="text-left md:text-right shrink-0">
-                          <span className="text-[10px] text-gray-400 font-bold block uppercase">Earned</span>
-                          <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
+                        <div className="flex flex-col items-start md:items-end gap-1 shrink-0">
+                          {/* COD Amount collected */}
+                          {order.codAmount != null && (
+                            <div className="text-left md:text-right">
+                              <span className="text-[10px] text-gray-400 font-bold block uppercase">COD Collected</span>
+                              <span className={`font-black text-base ${
+                                order.codCashStatus === 'with_partner' ? 'text-orange-600' : 'text-gray-700'
+                              }`}>{fmt(order.codAmount)}</span>
+                            </div>
+                          )}
+                          {/* Delivery earnings */}
+                          <div className="text-left md:text-right">
+                            <span className="text-[10px] text-gray-400 font-bold block uppercase">Your Earnings</span>
+                            <span className="font-black text-emerald-600 text-lg">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
+                          </div>
                         </div>
                       </div>
                     ))}

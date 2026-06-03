@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Search, Truck, CheckCircle, Clock, MapPin, CalendarDays, Shield, CreditCard, ChevronRight, RefreshCw, Copy, Check, ArrowLeft, Phone, Mail, ShoppingBag, XCircle, AlertTriangle } from 'lucide-react';
+import { Package, Search, Truck, CheckCircle, Clock, MapPin, CalendarDays, Shield, CreditCard, ChevronRight, RefreshCw, Copy, Check, ArrowLeft, Phone, Mail, ShoppingBag, XCircle, AlertTriangle, KeyRound, Banknote } from 'lucide-react';
 import { orderApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
@@ -434,6 +434,54 @@ export function OrderTracking() {
               </div>
             )}
 
+            {/* Delivery Verification Code — shown when order is out for delivery */}
+            {order.status === 'shipped' && order.deliveryCode && (
+              <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 shadow-lg text-white">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <KeyRound className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-black text-lg">Delivery Verification Code</p>
+                    <p className="text-indigo-200 text-xs">Share this code with your delivery agent to confirm receipt</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 my-4">
+                  {order.deliveryCode.split('').map((digit: string, i: number) => (
+                    <div
+                      key={i}
+                      className="w-12 h-14 bg-white/20 backdrop-blur border-2 border-white/30 rounded-xl flex items-center justify-center text-2xl font-black text-white shadow-inner"
+                    >
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2 mt-4 p-3 bg-white/10 rounded-xl">
+                  <Shield className="w-4 h-4 text-indigo-200 shrink-0" />
+                  <p className="text-xs text-indigo-100">
+                    <strong>Do not share</strong> this code until the delivery agent is at your door and you have received your items. This code is required to complete the delivery.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Delivery Code Pending info — when shipped but code not yet visible */}
+            {order.status === 'shipped' && !order.deliveryCode && (
+              <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-200 p-5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-indigo-100 rounded-xl flex items-center justify-center">
+                    <KeyRound className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-indigo-800">Delivery Code Generating...</p>
+                    <p className="text-xs text-indigo-600">Your 6-digit delivery code will appear here once the delivery partner picks up your order.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Status history timeline */}
             {order.statusHistory && order.statusHistory.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
@@ -576,7 +624,7 @@ export function OrderTracking() {
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-500">Method</span>
                     <span className="text-sm font-semibold text-gray-900 capitalize">
-                      {order.paymentMethod === 'test_bypass' ? '🧪 Test Bypass' : order.paymentMethod ?? 'N/A'}
+                      {order.paymentMethod === 'cod' ? '💵 Cash on Delivery' : order.paymentMethod ?? 'N/A'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -589,12 +637,7 @@ export function OrderTracking() {
                     <span className="text-xs text-gray-500">Amount</span>
                     <span className="text-sm font-black text-gray-900">{fmt(order.total)}</span>
                   </div>
-                  {order.razorpayPaymentId && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Transaction ID</span>
-                      <span className="text-xs font-mono text-gray-600">{order.razorpayPaymentId}</span>
-                    </div>
-                  )}
+
                 </div>
               </div>
             </div>

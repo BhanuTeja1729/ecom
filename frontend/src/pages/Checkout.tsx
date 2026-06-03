@@ -1,16 +1,10 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Check, ChevronRight, Shield, Lock, Truck, Zap, CalendarDays, Clock, MapPin, Home, Building2, Plus, Tag } from 'lucide-react';
+import { Check, ChevronRight, Shield, Truck, CalendarDays, Clock, MapPin, Home, Building2, Plus, Tag, Banknote, Package } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { useRouter } from '../lib/router';
-import { orderApi, paymentApi, userApi, cartApi } from '../lib/api';
-
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { orderApi, userApi, cartApi } from '../lib/api';
 
 type Step = 'shipping' | 'schedule' | 'review';
 
@@ -43,7 +37,6 @@ const TIME_SLOTS = [
 function getNextDays(count: number): Date[] {
   const days: Date[] = [];
   const today = new Date();
-  // Start from today (i = 0) for same-day delivery
   for (let i = 0; i < count; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
@@ -217,100 +210,8 @@ export function Checkout() {
     setStep('review');
   }
 
-  async function handlePayWithRazorpay() {
-    if (!user) { navigate('/auth'); return; }
-
-    setSubmitting(true);
-
-    try {
-      // Step 1: Create Razorpay order on backend (amount in paise)
-      const amountInPaise = Math.round(orderTotal * 100);
-      const { data: rzpOrder } = await paymentApi.createOrder(amountInPaise);
-
-      // Step 2: Open Razorpay checkout popup
-      const options = {
-        key: rzpOrder.keyId,
-        amount: rzpOrder.amount,
-        currency: rzpOrder.currency,
-        name: 'BLIPZO Store',
-        description: `Order — ${items.length} item${items.length > 1 ? 's' : ''}`,
-        order_id: rzpOrder.orderId,
-        prefill: {
-          name: shipping.fullName,
-          email: user.email,
-          contact: shipping.phone,
-        },
-        theme: {
-          color: '#f59e0b', // amber-500
-        },
-        handler: async function (response: any) {
-          try {
-            // Step 3: Verify payment on backend
-            await paymentApi.verify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-
-            // Step 4: Create order with verified payment info
-            const orderRes = await orderApi.create({
-              shippingAddress: {
-                fullName: shipping.fullName,
-                email: user.email,
-                phone: shipping.phone,
-                doorNo: shipping.doorNo,
-                addressLine1: shipping.address,
-                landmark: shipping.landmark,
-                city: shipping.city,
-                state: shipping.state,
-                postalCode: shipping.zip,
-                country: shipping.country,
-              },
-              paymentMethod: 'razorpay',
-              couponCode: coupon?.code ?? '',
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpayOrderId: response.razorpay_order_id,
-              scheduledDeliveryDate: selectedDate?.toISOString(),
-              scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
-              deliveryDistance: 0,
-              items: items.map(item => ({
-                productId: item.product._id || item.product.id,
-                variantId: item.variant?._id || item.variant?.id,
-                quantity: item.quantity,
-              })),
-            });
-
-            setOrderNumber(orderRes.data.orderNumber);
-            clearCart();
-            toast('Payment successful! Order placed.', 'success');
-          } catch (err: any) {
-            toast(err.message || 'Order creation failed after payment.', 'error');
-          } finally {
-            setSubmitting(false);
-          }
-        },
-        modal: {
-          ondismiss: function () {
-            setSubmitting(false);
-            toast('Payment was cancelled.', 'error');
-          },
-        },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (response: any) {
-        setSubmitting(false);
-        toast(`Payment failed: ${response.error.description}`, 'error');
-      });
-      rzp.open();
-    } catch (err: any) {
-      setSubmitting(false);
-      toast(err.message || 'Failed to initiate payment.', 'error');
-    }
-  }
-
-  // ── TEST BYPASS: Skip Razorpay, create order directly ──────────────────────
-  async function handleTestBypass() {
+  // ── COD Order Placement ─────────────────────────────────────────────────────
+  async function handlePlaceCODOrder() {
     if (!user) { navigate('/auth'); return; }
 
     setSubmitting(true);
@@ -328,7 +229,7 @@ export function Checkout() {
           postalCode: shipping.zip,
           country: shipping.country,
         },
-        paymentMethod: 'test_bypass',
+        paymentMethod: 'cod',
         couponCode: coupon?.code ?? '',
         scheduledDeliveryDate: selectedDate?.toISOString(),
         scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
@@ -341,9 +242,9 @@ export function Checkout() {
       });
       setOrderNumber(orderRes.data.orderNumber);
       clearCart();
-      toast('Test order placed successfully! (Payment bypassed)', 'success');
+      toast('Order placed successfully! Pay cash on delivery.', 'success');
     } catch (err: any) {
-      toast(err.message || 'Test order creation failed.', 'error');
+      toast(err.message || 'Order placement failed.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -370,13 +271,16 @@ export function Checkout() {
             <Check className="w-10 h-10 text-emerald-500" />
           </div>
           <h1 className="text-3xl font-black text-gray-900 mb-3">Order Confirmed!</h1>
-          <p className="text-gray-500 mb-2">Thank you for your purchase. Payment has been received.</p>
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-8">
+          <p className="text-gray-500 mb-2">Thank you for your order. Please have the cash ready on delivery.</p>
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
             <p className="text-sm text-gray-500 mb-1">Order Number</p>
             <p className="text-2xl font-black text-amber-600">{orderNumber}</p>
-            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-100">
-              <Shield className="w-3 h-3" /> Payment Verified
+
+            {/* COD Info Badge */}
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 text-xs font-bold rounded-full border border-amber-200">
+              <Banknote className="w-3 h-3" /> Cash on Delivery — Pay {fmt(orderTotal)}
             </div>
+
             {selectedDate && selectedSlot && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full border border-blue-100">
@@ -386,6 +290,17 @@ export function Checkout() {
                 <p className="text-sm text-gray-600">{TIME_SLOTS.find(s => s.id === selectedSlot)?.time}</p>
               </div>
             )}
+
+            {/* Delivery code note */}
+            <div className="mt-4 pt-4 border-t border-gray-100 text-left bg-blue-50 rounded-xl p-3">
+              <p className="text-xs font-bold text-blue-800 mb-1 flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" /> Delivery Verification Code
+              </p>
+              <p className="text-xs text-blue-700 leading-relaxed">
+                A 6-digit verification code will be generated and shown in your order tracking page when your order is out for delivery. Share this code with the delivery agent to confirm receipt.
+              </p>
+            </div>
+
             <p className="text-sm text-gray-500 mt-3">A confirmation email will be sent to <strong>{user?.email || shipping.email}</strong></p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -616,7 +531,6 @@ export function Checkout() {
                           type="button"
                           onClick={() => {
                             setSelectedDate(day);
-                            // Clear slot if switching to today and the slot is now past
                             if (isToday(day) && selectedSlot) {
                               const slot = TIME_SLOTS.find(s => s.id === selectedSlot);
                               if (slot && new Date().getHours() >= slot.startHour) {
@@ -660,7 +574,6 @@ export function Checkout() {
                       const isSelected = selectedSlot === slot.id;
                       const isSelectedToday = selectedDate && isToday(selectedDate);
                       const currentHour = new Date().getHours();
-                      // Slot is past if today is selected and the slot's start hour has already passed
                       const isPast = !!(isSelectedToday && currentHour >= slot.startHour);
                       return (
                         <button
@@ -735,6 +648,7 @@ export function Checkout() {
             {step === 'review' && !orderNumber && (
               <div className="bg-white rounded-2xl border border-gray-200 p-6">
                 <h2 className="text-xl font-black text-gray-900 mb-6">Review Your Order</h2>
+
                 {/* Shipping summary */}
                 <div className="mb-4 p-4 bg-gray-50 rounded-xl">
                   <div className="flex items-center justify-between mb-2">
@@ -795,13 +709,25 @@ export function Checkout() {
                   })}
                 </div>
 
-                {/* Payment info */}
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Zap className="w-4 h-4 text-amber-600" />
-                    <p className="text-sm font-bold text-amber-800">Secure Payment via Razorpay</p>
+                {/* COD Payment info */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                      <Banknote className="w-4 h-4 text-amber-700" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-amber-800">Cash on Delivery</p>
+                      <p className="text-xs text-amber-700">Pay when your order arrives at your door</p>
+                    </div>
                   </div>
-                  <p className="text-xs text-amber-700 ml-6">UPI, Cards, Net Banking, Wallets — all payment methods accepted. Your payment is protected by bank-grade encryption.</p>
+                  <div className="mt-3 pt-3 border-t border-amber-200">
+                    <div className="flex items-start gap-2">
+                      <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-700">
+                        A 6-digit verification code will be sent to your tracking page once your order is out for delivery. Share it with the delivery agent to confirm receipt.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-3 mt-6">
@@ -809,47 +735,27 @@ export function Checkout() {
                     Back
                   </button>
                   <button
-                    onClick={handlePayWithRazorpay}
+                    onClick={handlePlaceCODOrder}
                     disabled={submitting}
-                    className="flex-1 py-4 bg-amber-500 text-white font-bold text-lg rounded-xl hover:bg-amber-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                    className="flex-1 py-4 bg-amber-500 text-white font-bold text-lg rounded-xl hover:bg-amber-400 transition-all shadow-lg shadow-amber-200 disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     {submitting ? (
                       <>
                         <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Processing...
+                        Placing Order...
                       </>
                     ) : (
                       <>
-                        <Shield className="w-5 h-5" />
-                        Pay {fmt(orderTotal)}
+                        <Package className="w-5 h-5" />
+                        Place Order — {fmt(orderTotal)}
                       </>
                     )}
                   </button>
                 </div>
 
-                <div className="mt-4 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-gray-400" />
-                  <p className="text-xs text-gray-500">Payments are processed securely by Razorpay. We never store your card or banking details.</p>
-                </div>
-
-                {/* ── TEST BYPASS BUTTON ─────────────────────────────── */}
-                <div className="mt-4 p-4 bg-orange-50 border-2 border-dashed border-orange-300 rounded-xl">
-                  <p className="text-xs font-bold text-orange-700 mb-2 uppercase tracking-wider">🧪 Testing Mode</p>
-                  <p className="text-xs text-orange-600 mb-3">Skip Razorpay payment to test order tracking flow.</p>
-                  <button
-                    onClick={handleTestBypass}
-                    disabled={submitting}
-                    className="w-full py-3 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-400 transition-colors disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
-                  >
-                    {submitting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>🧪 Place Test Order (Skip Payment)</>
-                    )}
-                  </button>
+                <div className="mt-3 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
+                  <Banknote className="w-4 h-4 text-gray-400" />
+                  <p className="text-xs text-gray-500">No online payment needed. Pay <strong>{fmt(orderTotal)}</strong> in cash when your delivery arrives.</p>
                 </div>
               </div>
             )}
@@ -1003,6 +909,14 @@ export function Checkout() {
                  <div className="flex justify-between text-sm text-gray-600"><span>Shipping</span><span>{shippingCost === 0 ? 'Free' : fmt(shippingCost)}</span></div>
                  <div className="flex justify-between text-sm text-gray-600"><span>GST (18%)</span><span>{fmt(tax)}</span></div>
                  <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
+              </div>
+
+              {/* COD badge in sidebar */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <Banknote className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-700 font-semibold">Cash on Delivery — pay when it arrives!</p>
+                </div>
               </div>
 
               {/* Delivery schedule in sidebar */}

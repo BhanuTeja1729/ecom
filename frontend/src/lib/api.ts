@@ -153,17 +153,7 @@ export const orderApi = {
   cancel: (orderNumber: string, reason?: string) => api.put<{ success: boolean; data: any }>(`/orders/${orderNumber}/cancel`, { reason }),
 };
 
-// ─── Payments (Razorpay) ─────────────────────────────────────────────────────
-export const paymentApi = {
-  createOrder: (amount: number, currency = 'INR') =>
-    api.post<{ success: boolean; data: { orderId: string; amount: number; currency: string; keyId: string } }>(
-      '/payment/create-order', { amount, currency }
-    ),
-  verify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
-    api.post<{ success: boolean; data: { verified: boolean; razorpay_order_id: string; razorpay_payment_id: string } }>(
-      '/payment/verify', data
-    ),
-};
+// Payment via Razorpay removed — app uses Cash on Delivery (COD).
 
 // ─── User ────────────────────────────────────────────────────────────────────
 export const userApi = {
@@ -199,6 +189,10 @@ export const adminApi = {
   deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
   getDeliveryRate: () => api.get<{ success: boolean; data: number }>('/users/admin/delivery-rate'),
   updateDeliveryRate: (rate: number) => api.post<{ success: boolean; data: number }>('/users/admin/delivery-rate', { rate }),
+  recordRemittance: (id: string) =>
+    api.post<{ success: boolean; message: string; remittedCount: number; totalCash: number }>(
+      `/users/admin/delivery-partners/${id}/remit`
+    ),
 };
 
 // ─── Delivery ────────────────────────────────────────────────────────────────
@@ -213,6 +207,8 @@ export const deliveryApi = {
     api.put<{ success: boolean; data: any }>(`/delivery/orders/${id}/status`, { status, message }),
   getStats: () =>
     api.get<{ success: boolean; data: any }>('/delivery/stats'),
+  verifyCode: (id: string, code: string) =>
+    api.post<{ success: boolean; data: any }>(`/delivery/orders/${id}/verify-code`, { code }),
 };
 
 // ─── Media ───────────────────────────────────────────────────────────────────
