@@ -23,6 +23,15 @@ const redIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+const deliveryIcon = new L.Icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/3198/3198336.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+  popupAnchor: [0, -36],
+  shadowSize: [36, 36],
+});
+
 interface RouteMapProps {
   startLat: number;
   startLng: number;
@@ -149,23 +158,26 @@ export function RouteMap({
           </div>
         </div>
 
-        {distance !== null && (
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs ${
-            isOverRadius ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-          }`}>
-            {isOverRadius ? (
-              <>
-                <ShieldAlert className="w-3.5 h-3.5" />
-                <span>Exceeds {maxDistanceKm}km limit!</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Within Delivery Area</span>
-              </>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+
+          {distance !== null && (
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs ${
+              isOverRadius ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+            }`}>
+              {isOverRadius ? (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  <span>Exceeds {maxDistanceKm}km limit!</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Within Delivery Area</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Map Container */}
@@ -188,14 +200,21 @@ export function RouteMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           
-          <Marker position={startPoint} icon={goldIcon}>
-            <Popup>
-              <div className="text-xs font-bold">
-                <span className="text-amber-600 block mb-1">📍 Store Pickup</span>
-                <span className="text-gray-800">{startName}</span>
-              </div>
-            </Popup>
-          </Marker>
+          {(() => {
+            const isLivePartner = startName.toLowerCase().includes('live') || startName.toLowerCase().includes('your');
+            return (
+              <Marker position={startPoint} icon={isLivePartner ? deliveryIcon : goldIcon}>
+                <Popup>
+                  <div className="text-xs font-bold">
+                    <span className="text-amber-600 block mb-1">
+                      {isLivePartner ? '🛵 Delivery Partner (You)' : '📍 Store Pickup'}
+                    </span>
+                    <span className="text-gray-800">{startName}</span>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })()}
 
           <Marker position={endPoint} icon={redIcon}>
             <Popup>
@@ -214,6 +233,7 @@ export function RouteMap({
               opacity={0.8}
             />
           )}
+
 
           <FitBounds start={startPoint} end={endPoint} route={routeCoords} />
         </MapContainer>

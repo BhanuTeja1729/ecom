@@ -39,6 +39,22 @@ export function DeliveryDashboard() {
 
   const [profileForm, setProfileForm] = useState({ phone: '', upiId: '' });
   const [savingProfile, setSavingProfile] = useState(false);
+  const [partnerCoords, setPartnerCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Watch delivery partner's live GPS coordinates
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setPartnerCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => {
+        console.warn("GPS tracking error:", err);
+      },
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   // Initialize profile form
   useEffect(() => {
@@ -446,6 +462,12 @@ export function DeliveryDashboard() {
                                   {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.postalCode}
                                 </span>
                               </p>
+                              {order.deliveryDistanceKm && (
+                                <p className="text-xs text-gray-700 flex items-center gap-1.5 mt-2 font-bold">
+                                  <Navigation className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  Distance: <span className="text-blue-700 font-extrabold">{order.deliveryDistanceKm} km</span>
+                                </p>
+                              )}
                             </div>
                           </div>
 
@@ -499,20 +521,38 @@ export function DeliveryDashboard() {
                           </div>
 
                           {/* RouteMap view */}
-                          {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (
-                            <div className="mb-6 mt-4">
-                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Delivery Location Map</h4>
-                              <RouteMap
-                                startLat={inventoryCoords.lat}
-                                startLng={inventoryCoords.lng}
-                                endLat={order.shippingAddress.latitude}
-                                endLng={order.shippingAddress.longitude}
-                                startName="BLIPZO Warehouse"
-                                endName={order.shippingAddress.fullName || 'Customer Location'}
-                                maxDistanceKm={25}
-                              />
-                            </div>
-                          )}
+                          {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (() => {
+                            const isPreparing = order.status === 'processing';
+                            const startLat = partnerCoords?.lat ?? inventoryCoords.lat;
+                            const startLng = partnerCoords?.lng ?? inventoryCoords.lng;
+                            const endLat = partnerCoords 
+                              ? (isPreparing ? inventoryCoords.lat : order.shippingAddress.latitude)
+                              : order.shippingAddress.latitude;
+                            const endLng = partnerCoords 
+                              ? (isPreparing ? inventoryCoords.lng : order.shippingAddress.longitude)
+                              : order.shippingAddress.longitude;
+                            const startName = partnerCoords ? "Your Live Location" : "BLIPZO Warehouse";
+                            const endName = partnerCoords
+                              ? (isPreparing ? "BLIPZO Warehouse (Pickup)" : (order.shippingAddress.fullName || 'Customer Location'))
+                              : (order.shippingAddress.fullName || 'Customer Location');
+
+                            return (
+                              <div className="mb-6 mt-4">
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
+                                  {partnerCoords ? 'Live Navigation Map' : 'Delivery Location Map'}
+                                </h4>
+                                <RouteMap
+                                  startLat={startLat}
+                                  startLng={startLng}
+                                  endLat={endLat}
+                                  endLng={endLng}
+                                  startName={startName}
+                                  endName={endName}
+                                  maxDistanceKm={25}
+                                />
+                              </div>
+                            );
+                          })()}
 
                           {/* Actions Console */}
                           <div className="border-t border-gray-100 pt-5 mt-10 flex flex-wrap gap-3 items-start justify-between">
@@ -524,7 +564,7 @@ export function DeliveryDashboard() {
                               className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-gray-300 rounded-xl text-xs font-semibold text-gray-700 bg-white transition-all shadow-sm"
                             >
                               <Navigation className="w-3.5 h-3.5 text-amber-500" />
-                              Simulate Route
+                              Open Google Maps
                             </a>
 
                             <div className="flex flex-col gap-2 items-end">
@@ -624,40 +664,65 @@ export function DeliveryDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
                     {availableOrders.map((order) => (
-                      <div key={order._id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-amber-200 transition-all flex flex-col md:flex-row justify-between md:items-center gap-4">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-900 text-base">#{order.orderNumber}</span>
-                            <Badge variant="default">Unassigned</Badge>
-                            <span className="text-xs text-gray-400">Created: {fmtDate(order.createdAt)}</span>
-                          </div>
-                          <p className="text-xs text-gray-700 flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            Region: <span className="font-semibold">{order.shippingAddress.city}, {order.shippingAddress.state} ({order.shippingAddress.postalCode})</span>
-                          </p>
-                          <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            Slot: <span className="font-semibold text-gray-700">{order.scheduledDeliveryDate ? fmtDate(order.scheduledDeliveryDate) : 'Anytime'} / {order.scheduledDeliverySlot || 'Standard Time'}</span>
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
-                          <div className="text-left md:text-right">
-                            <span className="text-[10px] text-gray-400 font-bold block uppercase">Est. Payout</span>
-                            <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
-                          </div>
-                          <button
-                            onClick={() => handleClaimOrder(order._id, order.orderNumber)}
-                            disabled={actionLoading === order._id}
-                            className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5"
-                          >
-                            {actionLoading === order._id ? (
-                              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Truck className="w-3.5 h-3.5" />
+                      <div key={order._id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm hover:border-amber-200 transition-all flex flex-col gap-4">
+                        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 w-full">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 text-base">#{order.orderNumber}</span>
+                              <Badge variant="default">Unassigned</Badge>
+                              <span className="text-xs text-gray-400">Created: {fmtDate(order.createdAt)}</span>
+                            </div>
+                            <p className="text-xs text-gray-700 flex items-start gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                              <span>
+                                Destination: <span className="font-semibold">{order.shippingAddress.addressLine1}{order.shippingAddress.addressLine2 ? `, ${order.shippingAddress.addressLine2}` : ''}, {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.postalCode}</span>
+                              </span>
+                            </p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              Slot: <span className="font-semibold text-gray-700">{order.scheduledDeliveryDate ? fmtDate(order.scheduledDeliveryDate) : 'Anytime'} / {order.scheduledDeliverySlot || 'Standard Time'}</span>
+                            </p>
+                            {order.deliveryDistanceKm && (
+                              <p className="text-xs text-gray-700 flex items-center gap-1.5 font-bold">
+                                <Navigation className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                Distance: <span className="text-blue-700 font-extrabold">{order.deliveryDistanceKm} km</span>
+                              </p>
                             )}
-                            Accept Shipment
-                          </button>
+                          </div>
+                          <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end border-t md:border-0 pt-3 md:pt-0">
+                            <div className="text-left md:text-right">
+                              <span className="text-[10px] text-gray-400 font-bold block uppercase">Est. Payout</span>
+                              <span className="font-black text-emerald-600 text-base">{fmt(order.deliveryPayout ?? stats.deliveryRatePerKm ?? 50)}</span>
+                            </div>
+                            <button
+                              onClick={() => handleClaimOrder(order._id, order.orderNumber)}
+                              disabled={actionLoading === order._id}
+                              className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5"
+                            >
+                              {actionLoading === order._id ? (
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Truck className="w-3.5 h-3.5" />
+                              )}
+                              Accept Shipment
+                            </button>
+                          </div>
                         </div>
+
+                        {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (
+                          <div className="w-full mt-2 border-t border-gray-100 pt-4">
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Delivery Route Map</h4>
+                            <RouteMap
+                              startLat={inventoryCoords.lat}
+                              startLng={inventoryCoords.lng}
+                              endLat={order.shippingAddress.latitude}
+                              endLng={order.shippingAddress.longitude}
+                              startName="BLIPZO Warehouse"
+                              endName={order.shippingAddress.fullName || 'Customer Location'}
+                              maxDistanceKm={25}
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
