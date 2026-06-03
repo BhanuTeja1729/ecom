@@ -484,8 +484,7 @@ export function OrderTracking() {
                   </div>
                 </div>
               </div>
-
-
+            )}
 
             {/* Status history timeline */}
             {order.statusHistory && order.statusHistory.length > 0 && (
