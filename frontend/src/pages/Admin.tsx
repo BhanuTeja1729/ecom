@@ -402,6 +402,7 @@ export function Admin() {
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<any | null>(null);
   const [deleteCategoryLoading, setDeleteCategoryLoading] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+  const [categoryImagePublicId, setCategoryImagePublicId] = useState<string>('');
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryFormError, setCategoryFormError] = useState('');
   const [categoryImageUploading, setCategoryImageUploading] = useState(false);
@@ -415,6 +416,12 @@ export function Admin() {
       return;
     }
 
+    // Delete old image from Cloudinary before uploading new one
+    if (categoryImagePublicId) {
+      try { await mediaApi.remove(categoryImagePublicId); } catch { /* best-effort */ }
+      setCategoryImagePublicId('');
+    }
+
     setCategoryImageUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -425,12 +432,21 @@ export function Admin() {
       const res = await mediaApi.upload(formData);
       if (res.success && res.data.url) {
         setCategoryForm(f => ({ ...f, imageUrl: res.data.url }));
+        if (res.data.publicId) setCategoryImagePublicId(res.data.publicId);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to upload category image.');
     } finally {
       setCategoryImageUploading(false);
     }
+  };
+
+  const handleRemoveCategoryImage = async () => {
+    if (categoryImagePublicId) {
+      try { await mediaApi.remove(categoryImagePublicId); } catch { /* best-effort */ }
+      setCategoryImagePublicId('');
+    }
+    setCategoryForm(f => ({ ...f, imageUrl: '' }));
   };
 
   const [customers, setCustomers] = useState<any[]>([]);
@@ -491,7 +507,7 @@ export function Admin() {
       const [statsRes, ordersRes, productsRes, catsRes] = await Promise.all([
         adminApi.stats(),
         orderApi.list({ all: 'true' }),
-        productApi.list({ limit: '50', sort: 'createdAt', order: 'desc' }),
+        productApi.list({ all: 'true', sort: 'createdAt', order: 'desc' }),
         categoryApi.list({ all: 'true' }),
       ]);
       setStats(statsRes.data);
@@ -1653,6 +1669,7 @@ export function Admin() {
                                 sortOrder: cat.sortOrder ?? 0,
                                 isActive: cat.isActive !== false,
                               });
+                              setCategoryImagePublicId(''); // existing image's publicId is not known client-side
                               setCategoryFormError('');
                             }}
                             title="Edit category"
@@ -1952,17 +1969,28 @@ export function Admin() {
                       placeholder="Upload category image file"
                       className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white cursor-not-allowed text-gray-500"
                     />
-                    <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
-                      <Upload className="w-3.5 h-3.5" />
-                      Upload File
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleCategoryImageChange}
-                        disabled={categoryImageUploading}
-                      />
-                    </label>
+                    <div className="flex gap-2">
+                      <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        {categoryImageUploading ? 'Uploading…' : 'Upload File'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleCategoryImageChange}
+                          disabled={categoryImageUploading}
+                        />
+                      </label>
+                      {categoryForm.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveCategoryImage}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" /> Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

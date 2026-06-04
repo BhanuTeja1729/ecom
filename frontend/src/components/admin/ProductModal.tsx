@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Upload, Loader } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Plus, Trash2, Upload, Loader, GripVertical } from 'lucide-react';
 import { categoryApi, mediaApi } from '../../lib/api';
 
 interface Props {
@@ -23,6 +23,9 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
@@ -54,6 +57,9 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
       const res = await mediaApi.upload(formData);
       if (res.success && res.data.url) {
         setImg(index, 'url', res.data.url);
+        if (res.data.publicId) {
+          setImg(index, 'publicId', res.data.publicId);
+        }
       }
     } catch (err: any) {
       alert(err.message || 'Failed to upload image.');
@@ -152,8 +158,41 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
       images: [...p.images, { url: '', altText: '', isPrimary: false, sortOrder: p.images.length }],
     }));
 
-  const removeImg = (i: number) =>
+  const removeImg = async (i: number) => {
+    const img = form.images[i];
+    // Delete from Cloudinary if this image was uploaded (has a publicId)
+    if (img?.publicId) {
+      try { await mediaApi.remove(img.publicId); } catch { /* best-effort */ }
+    }
     setForm((p: any) => ({ ...p, images: p.images.filter((_: any, idx: number) => idx !== i) }));
+  };
+
+  // ── Drag-and-drop reorder ──────────────────────────────────────────────────
+  const handleDragStart = (i: number) => {
+    dragIndexRef.current = i;
+    setDraggingIndex(i);
+  };
+
+  const handleDragEnter = (i: number) => {
+    setDragOverIndex(i);
+  };
+
+  const handleDragEnd = () => {
+    const from = dragIndexRef.current;
+    const to = dragOverIndex;
+    if (from !== null && to !== null && from !== to) {
+      setForm((p: any) => {
+        const imgs = [...p.images];
+        const [moved] = imgs.splice(from, 1);
+        imgs.splice(to, 0, moved);
+        // Re-assign sortOrder based on new positions
+        return { ...p, images: imgs.map((img: any, idx: number) => ({ ...img, sortOrder: idx })) };
+      });
+    }
+    dragIndexRef.current = null;
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+  };
 
   const addVariant = () =>
     setForm((p: any) => ({
@@ -498,15 +537,45 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
           {/* Images */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className={label + ' mb-0'}>Product Images</label>
+              <div>
+                <label className={label + ' mb-0'}>Product Images</label>
+                {form.images.length > 1 && (
+                  <p className="text-[11px] text-gray-400 mt-0.5">Drag ⠿ to reorder</p>
+                )}
+              </div>
               <button type="button" onClick={addImg} className="text-xs text-amber-600 font-semibold flex items-center gap-1 hover:underline">
                 <Plus className="w-3.5 h-3.5" /> Add Image Slot
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {form.images.map((img: any, i: number) => (
-                <div key={i} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center bg-gray-50 p-3 rounded-xl border border-gray-100 relative group">
-                  {/* Thumbnail / Upload Status */}
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragEnter={() => handleDragEnter(i)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e => e.preventDefault()}
+                  className={[
+                    'flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 rounded-xl border relative group transition-all duration-150',
+                    draggingIndex === i
+                      ? 'opacity-40 scale-[0.98] bg-gray-100 border-dashed border-gray-300'
+                      : dragOverIndex === i
+                      ? 'bg-amber-50 border-amber-400 shadow-md shadow-amber-100'
+                      : 'bg-gray-50 border-gray-100 hover:border-gray-200',
+                  ].join(' ')}
+                >
+                  {/* Drag Handle */}
+                  {form.images.length > 1 && (
+                    <div
+                      className="hidden sm:flex items-center self-stretch cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors px-0.5 shrink-0"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-5 h-5" />
+                    </div>
+                  )}
+
+                  {/* Thumbnail */}
                   <div className="w-16 h-16 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden shrink-0 relative">
                     {img.url ? (
                       <img src={img.url} alt={img.altText || 'Product'} className="w-full h-full object-cover" />
@@ -515,6 +584,10 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
                     ) : (
                       <Upload className="w-6 h-6 text-gray-300" />
                     )}
+                    {/* Position badge */}
+                    <span className="absolute bottom-0 right-0 bg-gray-900/70 text-white text-[10px] font-bold px-1 rounded-tl-md">
+                      #{i + 1}
+                    </span>
                   </div>
 
                   <div className="flex-1 w-full space-y-2">
@@ -525,9 +598,13 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
                         readOnly
                         placeholder="Click Upload File to choose an image"
                       />
-                      <label className="px-3 py-2 bg-gray-900 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1 shrink-0">
-                        <Upload className="w-3 h-3" />
-                        Upload File
+                      <label className={`px-3 py-2 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1 shrink-0 ${
+                        uploadingIndex === i ? 'bg-amber-500 animate-pulse' : 'bg-gray-900 hover:bg-amber-600'
+                      }`}>
+                        {uploadingIndex === i
+                          ? <><Loader className="w-3 h-3 animate-spin" /> Uploading…</>
+                          : <><Upload className="w-3 h-3" /> Upload File</>
+                        }
                         <input
                           type="file"
                           accept="image/*"
@@ -551,12 +628,11 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
                           className="rounded border-gray-300 text-amber-500 focus:ring-amber-500 w-3.5 h-3.5"
                           checked={img.isPrimary}
                           onChange={e => {
-                            // Enforce only one primary image
                             setForm((p: any) => ({
                               ...p,
                               images: p.images.map((im: any, idx: number) => ({
                                 ...im,
-                                isPrimary: idx === i ? e.target.checked : false
+                                isPrimary: idx === i ? e.target.checked : false,
                               }))
                             }));
                           }}

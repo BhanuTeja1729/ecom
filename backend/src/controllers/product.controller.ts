@@ -49,7 +49,7 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
   try {
     const {
       page = '1', limit = '20', category, categorySlug, search, sort = 'createdAt',
-      order = 'desc', minPrice, maxPrice, featured, tags,
+      order = 'desc', minPrice, maxPrice, featured, tags, all,
     } = req.query as Record<string, string>;
 
     const query: any = { isActive: true };
@@ -104,6 +104,19 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
 
     const sortDir = order === 'asc' ? 1 : -1;
     const sortObj: any = { [sort]: sortDir };
+
+    // all=true → return every matching product (admin use only, no pagination cap)
+    if (all === 'true') {
+      const [products, total] = await Promise.all([
+        Product.find(query).populate('category', 'name slug').sort(sortObj).lean(),
+        Product.countDocuments(query),
+      ]);
+      return res.json({
+        success: true,
+        data: products,
+        pagination: { page: 1, limit: total, total, pages: 1 },
+      });
+    }
 
     const pageNum = parseInt(page);
     const limitNum = Math.min(parseInt(limit), 200);

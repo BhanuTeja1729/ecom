@@ -169,17 +169,22 @@ const CAT_COLORS = [
 export function Shop({ categorySlug }: { categorySlug?: string }) {
   const { addItem } = useCart();
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]); // top-level only
+  const [allCategories, setAllCategories] = useState<any[]>([]); // all (incl. children)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState(categorySlug ?? '');
   const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch categories once on mount
-    categoryApi.list()
-      .then(res => setCategories(res.data ?? []))
-      .catch(() => {});
+    // Fetch top-level categories (for the pill strip) AND all categories (for grouping)
+    Promise.all([
+      categoryApi.list(),
+      categoryApi.list({ all: 'true' }),
+    ]).then(([topRes, allRes]) => {
+      setCategories(topRes.data ?? []);
+      setAllCategories(allRes.data ?? []);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -216,14 +221,37 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
     return !search || p.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  // Grouped by category when there is no search query or active category selected
+  // Grouped by category when there is no search query or active category selected.
+  // Products may belong to a CHILD category; we resolve them up to their top-level parent.
   const grouped: { category: any; products: any[] }[] = [];
   if (!activeCategory && !search) {
+    // Build child→topLevel map: given any category id, find its top-level ancestor
+    const childToTopLevel = new Map<string, string>();
+    allCategories.forEach(cat => {
+      const catId = String(cat._id);
+      if (!cat.parent) {
+        // It is a top-level category itself
+        childToTopLevel.set(catId, catId);
+      } else {
+        const parentId = String(cat.parent?._id ?? cat.parent);
+        // Map child → parent (parent is assumed top-level here)
+        childToTopLevel.set(catId, parentId);
+      }
+    });
+
     categories.forEach(cat => {
-      const prods = allProducts.filter(p => p.category?.slug === cat.slug || p.category?._id === cat._id || p.category === cat._id);
+      const catId = String(cat._id);
+      const prods = allProducts.filter(p => {
+        const pCatId = String(p.category?._id ?? p.category ?? '');
+        // Direct match OR child-of-this-top-level match
+        return pCatId === catId ||
+          p.category?.slug === cat.slug ||
+          childToTopLevel.get(pCatId) === catId;
+      });
       if (prods.length > 0) grouped.push({ category: cat, products: prods });
     });
-    const uncatProds = allProducts.filter(p => !p.category);
+    const matchedIds = new Set(grouped.flatMap(g => g.products.map((p: any) => p._id)));
+    const uncatProds = allProducts.filter(p => !p.category || !matchedIds.has(p._id));
     if (uncatProds.length > 0) grouped.push({ category: { name: 'Other', slug: '' }, products: uncatProds });
   }
 
