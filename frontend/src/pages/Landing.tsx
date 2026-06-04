@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowRight, Shield, Truck, RotateCcw, Star, Zap, ShoppingBag, Package, Users } from 'lucide-react';
+import { ArrowRight, Shield, Truck, RotateCcw, Star, Zap, ShoppingBag, Package, Users, MapPin } from 'lucide-react';
 import { useRouter } from '../lib/router';
 import { useAuth } from '../contexts/AuthContext';
 import { Footer } from '../components/layout/Footer';
@@ -58,6 +58,7 @@ export function Landing() {
     { icon: Users, value: '600+', label: 'Happy Customers' },
     { icon: Package, value: '500+', label: 'Premium Products' },
     { icon: ShoppingBag, value: '3000+', label: 'Orders Delivered' },
+    { icon: MapPin, value: '99%', label: 'On-Time Delivery' },
   ];
 
   // Wait until auth finishes loading, then redirect if already logged in
@@ -180,7 +181,7 @@ export function Landing() {
               </div>
               <div>
                 <div className="flex text-amber-400 text-sm">★★★★★</div>
-                <p className="text-gray-400 text-xs mt-0.5">Loved by 50,000+ customers</p>
+                <p className="text-gray-400 text-xs mt-0.5">Loved by 600+ customers</p>
               </div>
             </div>
           </div>
@@ -227,7 +228,7 @@ export function Landing() {
       {/* ── Stats bar ── */}
       <section className="py-10 bg-amber-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {dynamicStats.map(({ icon: Icon, value, label }) => (
               <div key={label} className="flex flex-col items-center gap-2 text-center">
                 <Icon className="w-6 h-6 text-white/80" />
