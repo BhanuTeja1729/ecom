@@ -2,6 +2,28 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Plus, Trash2, Upload, Loader, GripVertical } from 'lucide-react';
 import { categoryApi, mediaApi } from '../../lib/api';
 
+/**
+ * Extract Cloudinary publicId from a Cloudinary secure_url.
+ * URL format: https://res.cloudinary.com/<cloud>/image/upload/[transformations/]v<version>/<folder>/<file>.<ext>
+ * publicId = everything after /upload/ (and optional version), without the file extension.
+ */
+function extractCloudinaryPublicId(url: string): string | null {
+  if (!url || !url.includes('cloudinary.com')) return null;
+  try {
+    const uploadIdx = url.indexOf('/upload/');
+    if (uploadIdx === -1) return null;
+    let path = url.slice(uploadIdx + '/upload/'.length);
+    // Strip version prefix like v1234567890/
+    path = path.replace(/^v\d+\//, '');
+    // Strip file extension
+    path = path.replace(/\.[^/.]+$/, '');
+    // Decode URL-encoded characters (e.g. %20 → space) to match Cloudinary's stored publicId
+    return decodeURIComponent(path) || null;
+  } catch {
+    return null;
+  }
+}
+
 interface Props {
   product: any | null;   // null = create mode
   categories: any[];
@@ -50,7 +72,8 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
     const formData = new FormData();
     formData.append('file', file);
     formData.append('type', 'product');
-    formData.append('categoryName', selectedCat.name);
+    // Send categoryId so the backend can resolve the full parent→child folder path
+    formData.append('categoryId', selectedCat._id);
     formData.append('productName', form.name.trim());
 
     try {
@@ -67,6 +90,7 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
       setUploadingIndex(null);
     }
   };
+
 
   // Category inline state
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -90,7 +114,14 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
         isFeatured: product.isFeatured ?? false,
         isActive: product.isActive ?? true,
         images: product.images?.length
-          ? product.images.map((i: any) => ({ url: i.url, altText: i.altText ?? '', isPrimary: i.isPrimary, sortOrder: i.sortOrder }))
+          ? product.images.map((i: any) => ({
+              url: i.url,
+              altText: i.altText ?? '',
+              isPrimary: i.isPrimary,
+              sortOrder: i.sortOrder,
+              // Restore publicId from stored field or derive it from the URL
+              publicId: i.publicId ?? extractCloudinaryPublicId(i.url) ?? '',
+            }))
           : [{ url: '', altText: '', isPrimary: true, sortOrder: 0 }],
         variants: (product.variants || product.product_variants)?.length
           ? (product.variants || product.product_variants).map((v: any) => ({
@@ -159,13 +190,22 @@ export function ProductModal({ product, categories, onSave, onClose, onAddCatego
     }));
 
   const removeImg = async (i: number) => {
+    if (!window.confirm('Delete this image from Cloudinary? This cannot be undone.')) return;
     const img = form.images[i];
-    // Delete from Cloudinary if this image was uploaded (has a publicId)
-    if (img?.publicId) {
-      try { await mediaApi.remove(img.publicId); } catch { /* best-effort */ }
+    // Resolve publicId: prefer stored value, fall back to extracting from URL
+    const publicId = img?.publicId || extractCloudinaryPublicId(img?.url);
+    if (publicId) {
+      try {
+        await mediaApi.remove(publicId);
+      } catch (err: any) {
+        // Warn but still remove from form — the image may already be gone or was seeded
+        console.warn('Cloudinary delete failed for publicId:', publicId, err?.message);
+        setError(`Warning: Could not delete image from Cloudinary (${err?.message || 'unknown error'}). It may need to be removed manually.`);
+      }
     }
     setForm((p: any) => ({ ...p, images: p.images.filter((_: any, idx: number) => idx !== i) }));
   };
+
 
   // ── Drag-and-drop reorder ──────────────────────────────────────────────────
   const handleDragStart = (i: number) => {

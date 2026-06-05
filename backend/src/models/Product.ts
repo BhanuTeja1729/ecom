@@ -14,6 +14,7 @@ export interface IProductVariant {
 
 export interface IProductImage {
   url: string;
+  publicId?: string;
   altText: string;
   sortOrder: number;
   isPrimary: boolean;
@@ -50,6 +51,7 @@ export interface IProduct extends Document {
 
 const ProductImageSchema = new Schema<IProductImage>({
   url: { type: String, required: true },
+  publicId: { type: String },
   altText: String,
   sortOrder: { type: Number, default: 0 },
   isPrimary: { type: Boolean, default: false },

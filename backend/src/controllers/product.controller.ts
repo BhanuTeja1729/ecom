@@ -29,6 +29,7 @@ const productSchema = z.object({
   metaDescription: z.string().optional(),
   images: z.array(z.object({
     url: z.string(),
+    publicId: z.string().optional(),
     altText: z.string().optional(),
     sortOrder: z.number().default(0),
     isPrimary: z.boolean().default(false),
