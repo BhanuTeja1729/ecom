@@ -25,7 +25,7 @@ export function Hero() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-500/30 rounded-full mb-8">
             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            <span className="text-amber-400 text-sm font-semibold">Trusted by 50,000+ customers</span>
+            <span className="text-amber-400 text-sm font-semibold">Trusted by 600+ customers</span>
           </div>
 
           {/* Headline */}

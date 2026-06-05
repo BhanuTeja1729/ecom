@@ -203,7 +203,7 @@ export function Auth() {
             Premium Shopping,<br />Reimagined
           </h2>
           <p className="text-gray-400 leading-relaxed max-w-sm">
-            Join 50,000+ members enjoying exclusive deals, early access to new products, and a world-class shopping experience.
+            Join 600+ members enjoying exclusive deals, early access to new products, and a world-class shopping experience.
           </p>
           <div className="grid grid-cols-2 gap-4 mt-10">
             {[

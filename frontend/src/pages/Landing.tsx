@@ -360,7 +360,7 @@ export function Landing() {
             Create Account
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </button>
-          <p className="text-gray-500 text-sm mt-4">No credit card required. Join 50,000+ happy customers.</p>
+          <p className="text-gray-500 text-sm mt-4">No credit card required. Join 600+ happy customers. Service limited to Zirakpur, Punjab</p>
         </div>
       </section>
 
