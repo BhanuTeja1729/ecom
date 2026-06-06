@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext';
 // ── Inventory / warehouse coordinates (configurable via env) ───────────────
 const INVENTORY_LAT = parseFloat(import.meta.env.VITE_INVENTORY_LAT || '13.0654465');
 const INVENTORY_LNG = parseFloat(import.meta.env.VITE_INVENTORY_LNG || '77.5915385');
-const DELIVERY_RADIUS_KM = parseFloat(import.meta.env.VITE_DELIVERY_RADIUS_KM || '25');
+const DELIVERY_RADIUS_KM = parseFloat(import.meta.env.VITE_DELIVERY_RADIUS_KM || '12');
 
 export type LocationStatus = 'idle' | 'loading' | 'granted' | 'denied' | 'unavailable';
 
