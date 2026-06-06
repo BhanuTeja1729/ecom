@@ -44,7 +44,7 @@ export function Legal({ page }: LegalProps) {
               },
               {
                 title: '7. Contact Us',
-                body: 'If you have questions about this Privacy Policy, please contact us at: BLIPZO Innovations Pvt. Ltd., Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005. Email: privacy@blipzo.com.',
+                body: 'If you have questions about this Privacy Policy, please contact us at: BLIPZO Innovations Pvt. Ltd., Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005. Email: 2804blipzoinnovationptv@gmail.com',
               },
             ].map(({ title, body }) => (
               <div key={title}>

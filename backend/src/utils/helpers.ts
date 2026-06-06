@@ -34,7 +34,7 @@ export function calculateOrderTotals(
   taxRate = 0.18
 ) {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const taxAmount = (subtotal - discountAmount) * taxRate;
+  const taxAmount = subtotal > 199 ? 0 : Math.round((subtotal - discountAmount) * taxRate);
   const total = subtotal - discountAmount + shippingAmount + taxAmount;
   return { subtotal, taxAmount, total };
 }

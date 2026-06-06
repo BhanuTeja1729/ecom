@@ -20,8 +20,12 @@ import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
 import paymentRoutes from './routes/payment.routes';
-import deliveryRoutes from './routes/delivery.routes';
 import mediaRoutes from './routes/media.routes';
+import couponRoutes from './routes/coupon.routes';
+import routeRoutes from './routes/route.routes';
+import deliveryRoutes from './routes/delivery.routes';
+
+
 
 const app = express();
 
@@ -93,6 +97,9 @@ app.use(`${BASE}/users`, userRoutes);
 app.use(`${BASE}/payment`, paymentRoutes);
 app.use(`${BASE}/delivery`, deliveryRoutes);
 app.use(`${BASE}/media`, mediaRoutes);
+app.use(`${BASE}/coupons`, couponRoutes);
+app.use(`${BASE}/routes`, routeRoutes);
+
 
 // ─── Serve Frontend (production) ────────────────────────────────────────────
 const frontendDist = path.join(__dirname, '../../frontend/dist');
@@ -111,6 +118,35 @@ app.use(errorHandler);
 async function start() {
   try {
     await connectDB();
+
+    // Run payout migration on server start/hot-reload
+    try {
+      const { Order } = await import('./models/Order');
+      const { getSettingValue } = await import('./models/Setting');
+      const flatPayout = await getSettingValue('flatDeliveryPayout', 50);
+      console.log(`[Migration] Active flat delivery payout: ₹${flatPayout}`);
+      const orders = await Order.find({});
+      let updatedCount = 0;
+      for (const order of orders) {
+        let changed = false;
+        if (order.deliveryDistanceKm === undefined || order.deliveryDistanceKm === null) {
+          order.deliveryDistanceKm = 5.0;
+          changed = true;
+        }
+        if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== flatPayout) {
+          order.deliveryPayout = flatPayout;
+          changed = true;
+        }
+        if (changed) {
+          await order.save();
+          updatedCount++;
+        }
+      }
+      console.log(`[Migration] Successfully updated ${updatedCount} orders.`);
+    } catch (migErr) {
+      console.error('[Migration] Failed:', migErr);
+    }
+
     const port = parseInt(env.PORT, 10);
     app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port} [${env.NODE_ENV}]`);
@@ -125,3 +161,6 @@ async function start() {
 start();
 
 export default app;
+
+// Trigger rebuild for UPI settings and salary payout options
+

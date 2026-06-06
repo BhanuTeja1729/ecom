@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { Product } from '../models/Product';
 import { Category } from '../models/Category';
 import { Media } from '../models/Media';
+import { User } from '../models/User';
 import cloudinary from '../config/cloudinary';
 import { createError } from '../middleware/error';
 import { slugify } from '../utils/helpers';
@@ -28,6 +29,7 @@ const productSchema = z.object({
   metaDescription: z.string().optional(),
   images: z.array(z.object({
     url: z.string(),
+    publicId: z.string().optional(),
     altText: z.string().optional(),
     sortOrder: z.number().default(0),
     isPrimary: z.boolean().default(false),
@@ -37,6 +39,7 @@ const productSchema = z.object({
     type: z.string(),
     value: z.string(),
     priceModifier: z.number().default(0),
+    comparePriceModifier: z.number().default(0),
     inventory: z.number().int().default(0),
     sku: z.string().optional(),
     sortOrder: z.number().default(0),
@@ -47,7 +50,7 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
   try {
     const {
       page = '1', limit = '20', category, categorySlug, search, sort = 'createdAt',
-      order = 'desc', minPrice, maxPrice, featured, tags,
+      order = 'desc', minPrice, maxPrice, featured, tags, all,
     } = req.query as Record<string, string>;
 
     const query: any = { isActive: true };
@@ -103,6 +106,19 @@ export async function getProducts(req: Request, res: Response, next: NextFunctio
     const sortDir = order === 'asc' ? 1 : -1;
     const sortObj: any = { [sort]: sortDir };
 
+    // all=true → return every matching product (admin use only, no pagination cap)
+    if (all === 'true') {
+      const [products, total] = await Promise.all([
+        Product.find(query).populate('category', 'name slug').sort(sortObj).lean(),
+        Product.countDocuments(query),
+      ]);
+      return res.json({
+        success: true,
+        data: products,
+        pagination: { page: 1, limit: total, total, pages: 1 },
+      });
+    }
+
     const pageNum = parseInt(page);
     const limitNum = Math.min(parseInt(limit), 200);
     const skip = (pageNum - 1) * limitNum;
@@ -151,8 +167,11 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
 export async function updateProduct(req: Request, res: Response, next: NextFunction) {
   try {
     const data = productSchema.partial().parse(req.body);
-    const product = await Product.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+    const product = await Product.findById(req.params.id);
     if (!product) throw createError('Product not found', 404);
+
+    Object.assign(product, data);
+    await product.save();
 
     // Link newly uploaded images and remove associations for unlinked images
     if (product.images) {
@@ -217,5 +236,52 @@ export async function updateInventory(req: Request, res: Response, next: NextFun
     ).populate('category', 'name slug');
     if (!product) throw createError('Product not found', 404);
     res.json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
+export async function getPublicStats(req: Request, res: Response, next: NextFunction) {
+  try {
+    const [productCount, customerCount] = await Promise.all([
+      Product.countDocuments({ isActive: true }),
+      User.countDocuments({ role: 'customer' }),
+    ]);
+    res.json({
+      success: true,
+      data: {
+        products: productCount,
+        customers: customerCount,
+      },
+    });
+  } catch (err) { next(err); }
+}
+
+const bulkInventorySchema = z.array(z.object({
+  sku: z.string(),
+  inventory: z.number().int().min(0),
+  lowStockThreshold: z.number().int().min(0).optional(),
+}));
+
+export async function bulkUpdateInventory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const updates = bulkInventorySchema.parse(req.body);
+    const results = [];
+
+    for (const update of updates) {
+      const product = await Product.findOne({ sku: update.sku.toUpperCase() });
+      if (!product) {
+        results.push({ sku: update.sku, success: false, error: 'Product not found' });
+        continue;
+      }
+
+      product.inventory = update.inventory;
+      if (update.lowStockThreshold !== undefined) {
+        product.lowStockThreshold = update.lowStockThreshold;
+      }
+
+      await product.save();
+      results.push({ sku: update.sku, success: true });
+    }
+
+    res.json({ success: true, results });
   } catch (err) { next(err); }
 }

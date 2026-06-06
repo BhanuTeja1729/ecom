@@ -91,6 +91,8 @@ export const authApi = {
     api.post<{ success: boolean; message: string }>('/auth/forgot-password', { email }),
   resetPassword: (body: { token: string; password: string }) =>
     api.post<{ success: boolean; message: string }>('/auth/reset-password', body),
+  updatePassword: (body: { currentPassword?: string; newPassword: string }) =>
+    api.put<{ success: boolean; message: string }>('/auth/update-password', body),
 };
 
 // ─── Products ────────────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ export const productApi = {
     return api.get<{ success: boolean; data: any[]; pagination: any }>(`/products${qs}`);
   },
   featured: () => api.get<{ success: boolean; data: any[] }>('/products/featured'),
+  publicStats: () => api.get<{ success: boolean; data: { products: number; customers: number } }>('/products/public-stats'),
   get: (slug: string) => api.get<{ success: boolean; data: any }>(`/products/${slug}`),
   reviews: (productId: string) => api.get<{ success: boolean; data: any[] }>(`/products/${productId}/reviews`),
   createReview: (productId: string, body: { rating: number; title?: string; body: string }) =>
@@ -113,6 +116,8 @@ export const productApi = {
     api.delete<{ success: boolean }>(`/products/${productId}`),
   updateInventory: (productId: string, inventory: number, lowStockThreshold?: number) =>
     api.patch<{ success: boolean; data: any }>(`/products/${productId}/inventory`, { inventory, lowStockThreshold }),
+  bulkUpdateInventory: (updates: { sku: string; inventory: number; lowStockThreshold?: number }[]) =>
+    api.post<{ success: boolean; results: { sku: string; success: boolean; error?: string }[] }>('/products/bulk-inventory', updates),
 };
 
 // ─── Categories ──────────────────────────────────────────────────────────────
@@ -133,7 +138,8 @@ export const cartApi = {
   add: (body: { productId: string; variantId?: string; quantity: number }) => api.post('/cart/items', body),
   update: (body: { productId: string; variantId?: string; quantity: number }) => api.put('/cart/items', body),
   clear: () => api.delete('/cart'),
-  applyCoupon: (code: string) => api.post<{ success: boolean; data: any }>('/cart/coupon', { code }),
+  applyCoupon: (code: string, subtotal?: number) => api.post<{ success: boolean; data: any }>('/cart/coupon', { code, subtotal }),
+  getAvailableCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons/available'),
 };
 
 // ─── Orders ──────────────────────────────────────────────────────────────────
@@ -147,17 +153,7 @@ export const orderApi = {
   cancel: (orderNumber: string, reason?: string) => api.put<{ success: boolean; data: any }>(`/orders/${orderNumber}/cancel`, { reason }),
 };
 
-// ─── Payments (Razorpay) ─────────────────────────────────────────────────────
-export const paymentApi = {
-  createOrder: (amount: number, currency = 'INR') =>
-    api.post<{ success: boolean; data: { orderId: string; amount: number; currency: string; keyId: string } }>(
-      '/payment/create-order', { amount, currency }
-    ),
-  verify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
-    api.post<{ success: boolean; data: { verified: boolean; razorpay_order_id: string; razorpay_payment_id: string } }>(
-      '/payment/verify', data
-    ),
-};
+// Payment via Razorpay removed — app uses Cash on Delivery (COD).
 
 // ─── User ────────────────────────────────────────────────────────────────────
 export const userApi = {
@@ -186,6 +182,17 @@ export const adminApi = {
     api.put<{ success: boolean; data: any }>(`/users/admin/delivery-partners/${id}`, body),
   deleteDeliveryPartner: (id: string) =>
     api.delete<{ success: boolean }>(`/users/admin/delivery-partners/${id}`),
+  paySalary: (id: string) =>
+    api.post<{ success: boolean; message: string; modifiedCount: number }>(`/users/admin/delivery-partners/${id}/pay`),
+  listCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons'),
+  createCoupon: (body: any) => api.post<{ success: boolean; data: any }>('/coupons', body),
+  deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
+  getDeliveryRate: () => api.get<{ success: boolean; data: number }>('/users/admin/delivery-rate'),
+  updateDeliveryRate: (rate: number) => api.post<{ success: boolean; data: number }>('/users/admin/delivery-rate', { rate }),
+  recordRemittance: (id: string) =>
+    api.post<{ success: boolean; message: string; remittedCount: number; totalCash: number }>(
+      `/users/admin/delivery-partners/${id}/remit`
+    ),
 };
 
 // ─── Delivery ────────────────────────────────────────────────────────────────
@@ -200,6 +207,8 @@ export const deliveryApi = {
     api.put<{ success: boolean; data: any }>(`/delivery/orders/${id}/status`, { status, message }),
   getStats: () =>
     api.get<{ success: boolean; data: any }>('/delivery/stats'),
+  verifyCode: (id: string, code: string) =>
+    api.post<{ success: boolean; data: any }>(`/delivery/orders/${id}/verify-code`, { code }),
 };
 
 // ─── Media ───────────────────────────────────────────────────────────────────
@@ -234,7 +243,9 @@ export interface UserData {
   role: 'customer' | 'delivery_partner' | 'admin';
   avatarUrl?: string;
   phone?: string;
+  upiId?: string;
   auth0Id?: string;
+  googleId?: string;
   shippingAddress?: any;
   wishlist?: string[];
 }

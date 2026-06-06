@@ -110,7 +110,7 @@ export async function verifyOtp(req: Request, res: Response, next: NextFunction)
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -137,7 +137,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -175,7 +175,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -316,7 +316,7 @@ export async function googleAuth(req: Request, res: Response, next: NextFunction
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -394,7 +394,7 @@ export async function auth0Auth(req: Request, res: Response, next: NextFunction)
       success: true,
       data: {
         accessToken: localAccessToken,
-        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl },
+        user: { id: user.id, email: user.email, fullName: user.fullName, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, upiId: user.upiId },
       },
     });
   } catch (err) {
@@ -501,6 +501,38 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     res.json({
       success: true,
       message: 'Password reset successful',
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+const updatePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(6).max(72),
+});
+
+export async function updatePassword(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const { currentPassword, newPassword } = updatePasswordSchema.parse(req.body);
+    const user = await User.findById(req.user.id).select('+password');
+    if (!user) throw createError('User not found', 404);
+
+    if (user.password) {
+      const isMatch = await user.comparePassword(currentPassword);
+      if (!isMatch) {
+        throw createError('Incorrect current password', 400);
+      }
+    } else {
+      throw createError('Password update is only available for email/password accounts', 400);
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Password updated successfully',
     });
   } catch (err) {
     next(err);

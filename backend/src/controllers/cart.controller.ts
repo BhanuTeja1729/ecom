@@ -105,14 +105,37 @@ export async function clearCart(req: Request & { user?: any }, res: Response, ne
 
 export async function applyCoupon(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
-    const { code } = z.object({ code: z.string() }).parse(req.body);
+    const { code, subtotal } = z.object({
+      code: z.string(),
+      subtotal: z.number().optional(),
+    }).parse(req.body);
+
     const coupon = await Coupon.findOne({ code: code.toUpperCase(), isActive: true });
     if (!coupon) throw createError('Invalid or expired coupon', 400);
     if (coupon.expiresAt && coupon.expiresAt < new Date()) throw createError('Coupon expired', 400);
     if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) throw createError('Coupon usage limit reached', 400);
+    if (req.user && coupon.usedBy && coupon.usedBy.map((id: any) => id.toString()).includes(req.user.id)) {
+      throw createError('You have already used this coupon', 400);
+    }
 
+    let currentSubtotal = subtotal;
     const query = getCartQuery(req);
-    await Cart.findOneAndUpdate(query, { couponCode: coupon.code });
+    const cart = await Cart.findOne(query);
+
+    if (currentSubtotal === undefined) {
+      if (!cart || cart.items.length === 0) throw createError('Cart is empty', 400);
+      currentSubtotal = cart.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    }
+
+    if (coupon.minimumOrderAmount && currentSubtotal < coupon.minimumOrderAmount) {
+      throw createError(`Minimum order amount of ₹${coupon.minimumOrderAmount} is required for this coupon`, 400);
+    }
+
+    if (cart) {
+      cart.couponCode = coupon.code;
+      await cart.save();
+    }
+
     res.json({ success: true, data: coupon });
   } catch (err) { next(err); }
 }

@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload } from 'lucide-react';
+import { Package, ShoppingBag, Users, DollarSign, Eye, BarChart3, Settings, Check, X, Pencil, AlertTriangle, Trash2, Plus, Truck, Phone, Mail, Calendar, IndianRupee, UserPlus, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, ArrowUpDown, ChevronLeft, ChevronRight, FolderOpen, Loader, Upload, Tag, Download, Banknote } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from '../lib/router';
+import { useToast } from '../contexts/ToastContext';
 import { adminApi, orderApi, productApi, categoryApi, mediaApi } from '../lib/api';
 import { Badge } from '../components/ui/Badge';
 import { ProductModal } from '../components/admin/ProductModal';
 
-type Tab = 'overview' | 'orders' | 'products' | 'categories' | 'customers' | 'employees';
+type Tab = 'overview' | 'orders' | 'products' | 'categories' | 'customers' | 'employees' | 'coupons';
 
 interface InventoryEdit {
   productId: string;
@@ -382,7 +383,10 @@ function useTableSortAndFilter<T>(data: T[]) {
 export function Admin() {
   const { isAdmin, loading } = useAuth();
   const { navigate } = useRouter();
+  const { toast } = useToast();
   const [tab, setTab] = useState<Tab>('overview');
+  const [deliveryRate, setDeliveryRate] = useState<number>(15);
+  const [savingDeliveryRate, setSavingDeliveryRate] = useState<boolean>(false);
   const [stats, setStats] = useState<any>({ totalRevenue: 0, totalOrders: 0, totalProducts: 0, totalUsers: 0 });
   const [orders, setOrders] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -391,12 +395,14 @@ export function Admin() {
   const [editing, setEditing] = useState<Record<string, InventoryEdit>>({});
   const [modalProduct, setModalProduct] = useState<any | null | 'new'>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [showImportModal, setShowImportModal] = useState<boolean>(false);
 
   // Category CRUD states
   const [modalCategory, setModalCategory] = useState<any | null | 'new'>(undefined);
   const [deleteCategoryTarget, setDeleteCategoryTarget] = useState<any | null>(null);
   const [deleteCategoryLoading, setDeleteCategoryLoading] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+  const [categoryImagePublicId, setCategoryImagePublicId] = useState<string>('');
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryFormError, setCategoryFormError] = useState('');
   const [categoryImageUploading, setCategoryImageUploading] = useState(false);
@@ -410,6 +416,12 @@ export function Admin() {
       return;
     }
 
+    // Delete old image from Cloudinary before uploading new one
+    if (categoryImagePublicId) {
+      try { await mediaApi.remove(categoryImagePublicId); } catch { /* best-effort */ }
+      setCategoryImagePublicId('');
+    }
+
     setCategoryImageUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -420,12 +432,21 @@ export function Admin() {
       const res = await mediaApi.upload(formData);
       if (res.success && res.data.url) {
         setCategoryForm(f => ({ ...f, imageUrl: res.data.url }));
+        if (res.data.publicId) setCategoryImagePublicId(res.data.publicId);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to upload category image.');
     } finally {
       setCategoryImageUploading(false);
     }
+  };
+
+  const handleRemoveCategoryImage = async () => {
+    if (categoryImagePublicId) {
+      try { await mediaApi.remove(categoryImagePublicId); } catch { /* best-effort */ }
+      setCategoryImagePublicId('');
+    }
+    setCategoryForm(f => ({ ...f, imageUrl: '' }));
   };
 
   const [customers, setCustomers] = useState<any[]>([]);
@@ -443,11 +464,31 @@ export function Admin() {
   const [deletePartnerLoading, setDeletePartnerLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Coupon states
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [modalCoupon, setModalCoupon] = useState<any | null | 'new'>(undefined);
+  const [deleteCouponTarget, setDeleteCouponTarget] = useState<any | null>(null);
+  const [deleteCouponLoading, setDeleteCouponLoading] = useState(false);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    description: '',
+    discountType: 'percentage' as 'percentage' | 'fixed',
+    discountValue: 0,
+    minimumOrderAmount: 0,
+    maximumDiscountAmount: undefined as number | undefined,
+    usageLimit: undefined as number | undefined,
+    expiresAt: '',
+  });
+  const [couponSaving, setCouponSaving] = useState(false);
+  const [couponFormError, setCouponFormError] = useState('');
+
   const { processedData: sortedOrders, FilterHeader: OrderHeader, DropdownHeader: OrderDropdown, DateRangeHeader: OrderDateRange } = useTableSortAndFilter(orders);
   const { processedData: sortedProducts, FilterHeader: ProductHeader, DropdownHeader: ProductDropdown } = useTableSortAndFilter(products);
   const { processedData: sortedCustomers, FilterHeader: CustomerHeader, DropdownHeader: CustomerDropdown, DateRangeHeader: CustomerDateRange } = useTableSortAndFilter(customers);
   const { processedData: sortedPartners, FilterHeader: PartnerHeader, DropdownHeader: PartnerDropdown } = useTableSortAndFilter(partners);
   const { processedData: sortedCategories, FilterHeader: CategoryHeader, DropdownHeader: CategoryDropdown } = useTableSortAndFilter(categories);
+  const { processedData: sortedCoupons, FilterHeader: CouponHeader, DropdownHeader: CouponDropdown } = useTableSortAndFilter(coupons);
 
   // Pagination for each table
   const { pageData: ordersPage, PaginationBar: OrdersPagination } = usePagination(sortedOrders, 8);
@@ -455,6 +496,7 @@ export function Admin() {
   const { pageData: customersPage, PaginationBar: CustomersPagination } = usePagination(sortedCustomers, 8);
   const { pageData: partnersPage, PaginationBar: PartnersPagination } = usePagination(sortedPartners, 8);
   const { pageData: categoriesPage, PaginationBar: CategoriesPagination } = usePagination(sortedCategories, 8);
+  const { pageData: couponsPage, PaginationBar: CouponsPagination } = usePagination(sortedCoupons, 8);
 
   useEffect(() => { if (!loading && !isAdmin) navigate('/'); }, [isAdmin, loading, navigate]);
 
@@ -465,7 +507,7 @@ export function Admin() {
       const [statsRes, ordersRes, productsRes, catsRes] = await Promise.all([
         adminApi.stats(),
         orderApi.list({ all: 'true' }),
-        productApi.list({ limit: '50', sort: 'createdAt', order: 'desc' }),
+        productApi.list({ all: 'true', sort: 'createdAt', order: 'desc' }),
         categoryApi.list({ all: 'true' }),
       ]);
       setStats(statsRes.data);
@@ -560,10 +602,29 @@ export function Admin() {
     adminApi.customers(params).then(r => setCustomers(r.data ?? [])).catch(() => {}).finally(() => setCustomersLoading(false));
   }, [tab, isAdmin, customerSearch]);
 
-  useEffect(() => {
-    if (tab !== 'employees' || !isAdmin) return;
+  const fetchDeliveryPartners = useCallback(() => {
+    if (!isAdmin) return;
     setPartnersLoading(true);
     adminApi.deliveryPartners().then(r => setPartners(r.data ?? [])).catch(() => {}).finally(() => setPartnersLoading(false));
+    adminApi.getDeliveryRate()
+      .then(r => {
+        if (r.success) setDeliveryRate(r.data);
+      })
+      .catch(() => {});
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (tab !== 'employees') return;
+    fetchDeliveryPartners();
+  }, [tab, fetchDeliveryPartners]);
+
+  useEffect(() => {
+    if (tab !== 'coupons' || !isAdmin) return;
+    setCouponsLoading(true);
+    adminApi.listCoupons()
+      .then(r => setCoupons(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setCouponsLoading(false));
   }, [tab, isAdmin]);
 
   async function handleSavePartner(e: React.FormEvent) {
@@ -596,6 +657,82 @@ export function Admin() {
     } finally { setPartnerSaving(false); }
   }
 
+  async function handlePaySalary(partner: any) {
+    if ((partner.unpaidEarnings ?? 0) <= 0) return;
+    const confirmPay = window.confirm(`Are you sure you want to mark salary as paid for ${partner.fullName}?\n\nThis will clear their pending payout of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} and reset it to ₹0.`);
+    if (!confirmPay) return;
+
+    try {
+      const res = await adminApi.paySalary(partner._id);
+      if (res.success) {
+        toast(`Salary of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} paid successfully to ${partner.fullName}!`, 'success');
+        fetchDeliveryPartners();
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to pay salary', 'error');
+    }
+  }
+
+  async function handleRecordRemittance(partner: any) {
+    if ((partner.cashInHand ?? 0) <= 0) return;
+    const confirmRemit = window.confirm(`Record cash remittance from ${partner.fullName}?\n\nThis confirms you have physically received ₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} in COD cash from this delivery partner.`);
+    if (!confirmRemit) return;
+
+    try {
+      const res = await adminApi.recordRemittance(partner._id);
+      if (res.success) {
+        toast(`₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} COD cash remittance recorded for ${partner.fullName}!`, 'success');
+        fetchDeliveryPartners();
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to record remittance', 'error');
+    }
+  }
+
+  async function handleSaveCoupon(e: React.FormEvent) {
+    e.preventDefault();
+    if (!couponForm.code.trim()) {
+      setCouponFormError('Coupon code is required.');
+      return;
+    }
+    setCouponSaving(true);
+    setCouponFormError('');
+    try {
+      const payload = {
+        code: couponForm.code.trim().toUpperCase(),
+        description: couponForm.description.trim() || undefined,
+        discountType: couponForm.discountType,
+        discountValue: Number(couponForm.discountValue),
+        minimumOrderAmount: Number(couponForm.minimumOrderAmount) || 0,
+        maximumDiscountAmount: couponForm.maximumDiscountAmount ? Number(couponForm.maximumDiscountAmount) : undefined,
+        usageLimit: couponForm.usageLimit ? Number(couponForm.usageLimit) : undefined,
+        expiresAt: couponForm.expiresAt || null,
+      };
+
+      const res = await adminApi.createCoupon(payload);
+      setCoupons(prev => [res.data, ...prev]);
+      setModalCoupon(undefined);
+    } catch (err: any) {
+      setCouponFormError(err.message || 'Failed to save coupon');
+    } finally {
+      setCouponSaving(false);
+    }
+  }
+
+  async function handleDeleteCoupon() {
+    if (!deleteCouponTarget) return;
+    setDeleteCouponLoading(true);
+    try {
+      await adminApi.deleteCoupon(deleteCouponTarget._id);
+      setCoupons(prev => prev.filter(c => c._id !== deleteCouponTarget._id));
+      setDeleteCouponTarget(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete coupon');
+    } finally {
+      setDeleteCouponLoading(false);
+    }
+  }
+
   async function handleDeletePartner() {
     if (!deletePartnerTarget) return;
     setDeletePartnerLoading(true);
@@ -613,6 +750,20 @@ export function Admin() {
       const res = await adminApi.updateDeliveryPartner(partner._id, { isActive: !partner.isActive });
       setPartners(prev => prev.map(p => p._id === partner._id ? { ...p, ...res.data } : p));
     } catch { /* ignore */ }
+  }
+
+  async function handleSaveDeliveryRate() {
+    setSavingDeliveryRate(true);
+    try {
+      const res = await adminApi.updateDeliveryRate(deliveryRate);
+      if (res.success) {
+        toast('Delivery rate updated successfully!', 'success');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to update delivery rate', 'error');
+    } finally {
+      setSavingDeliveryRate(false);
+    }
   }
 
   function startEdit(p: any) {
@@ -672,6 +823,7 @@ export function Admin() {
     { id: 'categories', label: 'Categories', icon: FolderOpen },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'employees', label: 'Employees', icon: Truck },
+    { id: 'coupons', label: 'Coupons', icon: Tag },
   ] as const;
 
   const lowStockProducts = products.filter(p =>
@@ -692,8 +844,17 @@ export function Admin() {
         </div>
 
         {/* ── Tab Navigation Bar (like image) ── */}
-        <div className="flex items-center justify-between border-b border-gray-200 mb-6">
-          <nav className="flex items-center gap-0 -mb-px">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-200 mb-6 gap-3 pb-2 sm:pb-0">
+          <style>{`
+            .no-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+            .no-scrollbar {
+              -ms-overflow-style: none;
+              scrollbar-width: none;
+            }
+          `}</style>
+          <nav className="flex items-center gap-0 -mb-px overflow-x-auto no-scrollbar w-full sm:w-auto scroll-smooth">
             {TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -721,39 +882,70 @@ export function Admin() {
           </nav>
 
           {/* Right-side action button */}
-          {tab === 'products' && (
-            <button
-              onClick={() => setModalProduct('new')}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <Plus className="w-4 h-4" /> Add Product
-            </button>
-          )}
-          {tab === 'categories' && (
-            <button
-              onClick={() => {
-                setModalCategory('new');
-                setCategoryForm({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
-                setCategoryFormError('');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <Plus className="w-4 h-4" /> Add Category
-            </button>
-          )}
-          {tab === 'employees' && (
-            <button
-              onClick={() => {
-                setEditingPartner(null);
-                setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
-                setPartnerFormError('');
-                setShowPartnerForm(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors mb-1"
-            >
-              <UserPlus className="w-4 h-4" /> Add Partner
-            </button>
-          )}
+          <div className="flex-shrink-0 flex items-center mb-1">
+            {tab === 'products' && (
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 bg-white text-sm font-bold rounded-xl hover:bg-gray-50 transition-colors w-full sm:w-auto justify-center"
+                >
+                  <Upload className="w-4 h-4" /> Import Stock
+                </button>
+                <button
+                  onClick={() => setModalProduct('new')}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+                >
+                  <Plus className="w-4 h-4" /> Add Product
+                </button>
+              </div>
+            )}
+            {tab === 'categories' && (
+              <button
+                onClick={() => {
+                  setModalCategory('new');
+                  setCategoryForm({ name: '', description: '', imageUrl: '', parent: '', sortOrder: 0, isActive: true });
+                  setCategoryFormError('');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" /> Add Category
+              </button>
+            )}
+            {tab === 'employees' && (
+              <button
+                onClick={() => {
+                  setEditingPartner(null);
+                  setPartnerForm({ fullName: '', email: '', phone: '', password: '' });
+                  setPartnerFormError('');
+                  setShowPartnerForm(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <UserPlus className="w-4 h-4" /> Add Partner
+              </button>
+            )}
+            {tab === 'coupons' && (
+              <button
+                onClick={() => {
+                  setModalCoupon('new');
+                  setCouponForm({
+                    code: '',
+                    description: '',
+                    discountType: 'percentage',
+                    discountValue: 0,
+                    minimumOrderAmount: 0,
+                    maximumDiscountAmount: undefined,
+                    usageLimit: undefined,
+                    expiresAt: '',
+                  });
+                  setCouponFormError('');
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors w-full sm:w-auto justify-center"
+              >
+                <Plus className="w-4 h-4" /> Add Coupon
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Overview ── */}
@@ -1175,7 +1367,42 @@ export function Admin() {
 
         {/* ── Employees (Delivery Partners) ── */}
         {tab === 'employees' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Delivery settings per-km rate config card */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-amber-500" /> Delivery Payout Settings
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">Configure the payout rate per kilometer for all delivery partners. Payouts are calculated dynamically at checkout.</p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="relative rounded-xl shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                      <span className="text-gray-500 font-bold text-sm">₹</span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deliveryRate}
+                      onChange={e => setDeliveryRate(Number(e.target.value))}
+                      className="w-32 border border-gray-200 rounded-xl pl-8 pr-4 py-2.5 text-sm font-bold text-gray-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none"
+                      placeholder="Rate per km"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSaveDeliveryRate}
+                    disabled={savingDeliveryRate || deliveryRate < 0}
+                    className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {savingDeliveryRate && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                    Save Rate
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
               <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                 <div>
@@ -1185,11 +1412,12 @@ export function Admin() {
               </div>
 
               {partners.length > 0 && (
-                <div className="grid grid-cols-3 gap-px bg-gray-100 border-b border-gray-100">
+                <div className="grid grid-cols-4 gap-px bg-gray-100 border-b border-gray-100">
                   {[
                     { label: 'Total Partners', value: partners.length, color: 'text-gray-900' },
-                    { label: 'Total Deliveries', value: partners.reduce((s, p) => s + (p.completedDeliveries ?? 0), 0), color: 'text-blue-600' },
-                    { label: 'Total Earnings Paid', value: `₹${partners.reduce((s, p) => s + (p.totalEarnings ?? 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-600' },
+                    { label: 'Total Deliveries', value: partners.reduce((s: number, p: any) => s + (p.completedDeliveries ?? 0), 0), color: 'text-blue-600' },
+                    { label: 'Total Earnings Paid', value: `₹${partners.reduce((s: number, p: any) => s + (p.totalEarnings ?? 0), 0).toLocaleString('en-IN')}`, color: 'text-emerald-600' },
+                    { label: 'COD Cash Outstanding', value: `₹${partners.reduce((s: number, p: any) => s + (p.cashInHand ?? 0), 0).toLocaleString('en-IN')}`, color: partners.some((p: any) => (p.cashInHand ?? 0) > 0) ? 'text-orange-600' : 'text-gray-400' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-white p-4 text-center">
                       <p className="text-xs text-gray-500 font-semibold mb-1">{label}</p>
@@ -1219,19 +1447,25 @@ export function Admin() {
                         ]} />
                       </th>
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
+                        Active
+                      </th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">
                         <PartnerHeader columnKey="completedDeliveries" title="Completed" />
                       </th>
                       <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">
                         <PartnerHeader columnKey="totalEarnings" title="Earnings" />
                       </th>
-                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-36">
+                        COD Cash
+                      </th>
+                      <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-28">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {partnersLoading ? (
+                       {partnersLoading ? (
                       [1,2,3].map(i => (
                         <tr key={i}>
-                          {[1,2,3,4,5,6,7,8].map(j => (
+                          {[1,2,3,4,5,6,7,8,9].map(j => (
                             <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
                           ))}
                         </tr>
@@ -1253,7 +1487,17 @@ export function Admin() {
                             <span className="font-semibold text-gray-900 text-sm">{p.fullName || '—'}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{p.email}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          <div>{p.email}</div>
+                          {p.upiId ? (
+                            <div className="mt-1 inline-flex items-center gap-1 font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded text-[10px]">
+                              <span className="uppercase text-[8px] tracking-wider text-purple-400">UPI:</span>
+                              <span className="select-all">{p.upiId}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-400 italic block mt-0.5">UPI: Not set</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{p.phone || '—'}</td>
                         <td className="px-4 py-3">
                           <Badge variant={p.isActive ? 'success' : 'error'}>{p.isActive ? 'Active' : 'Inactive'}</Badge>
@@ -1269,8 +1513,23 @@ export function Admin() {
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-black text-emerald-600 text-sm">₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
-                          <p className="text-[10px] text-gray-400">@ ₹75/delivery</p>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Due: ₹{(p.unpaidEarnings ?? 0).toLocaleString('en-IN')}</span>
+                            <span className="text-[9px] text-gray-400 block">Total: ₹{(p.totalEarnings ?? 0).toLocaleString('en-IN')}</span>
+                          </div>
+                        </td>
+                        {/* COD Cash in Hand column */}
+                        <td className="px-4 py-3">
+                          {(p.cashInHand ?? 0) > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black rounded-lg border border-orange-200">
+                                <Banknote className="w-3 h-3" />₹{(p.cashInHand ?? 0).toLocaleString('en-IN')}
+                              </span>
+                              <span className="text-[9px] text-gray-400">Remitted: ₹{(p.cashRemitted ?? 0).toLocaleString('en-IN')}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-gray-400">₹{(p.cashRemitted ?? 0).toLocaleString('en-IN')} remitted</span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
@@ -1292,6 +1551,22 @@ export function Admin() {
                               className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-amber-400 hover:bg-amber-50 text-gray-400 hover:text-amber-600 rounded-lg transition-all"
                             >
                               <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                             <button
+                              onClick={() => handlePaySalary(p)}
+                              disabled={(p.unpaidEarnings ?? 0) <= 0}
+                              title="Pay Delivery Salary"
+                              className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${(p.unpaidEarnings ?? 0) > 0 ? 'border-emerald-300 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'}`}
+                            >
+                              <IndianRupee className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRecordRemittance(p)}
+                              disabled={(p.cashInHand ?? 0) <= 0}
+                              title={`Record COD Remittance${(p.cashInHand ?? 0) > 0 ? ` (₹${(p.cashInHand ?? 0).toLocaleString('en-IN')})` : ''}`}
+                              className={`flex items-center justify-center w-7 h-7 border rounded-lg transition-all ${(p.cashInHand ?? 0) > 0 ? 'border-orange-300 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed'}`}
+                            >
+                              <Banknote className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setDeletePartnerTarget(p)}
@@ -1394,6 +1669,7 @@ export function Admin() {
                                 sortOrder: cat.sortOrder ?? 0,
                                 isActive: cat.isActive !== false,
                               });
+                              setCategoryImagePublicId(''); // existing image's publicId is not known client-side
                               setCategoryFormError('');
                             }}
                             title="Edit category"
@@ -1416,6 +1692,82 @@ export function Admin() {
               </table>
             </div>
             <CategoriesPagination />
+          </div>
+        )}
+
+        {/* ── Coupons ── */}
+        {tab === 'coupons' && (
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-black text-gray-900">Coupon Codes</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{coupons.length} coupons total</p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-40">
+                      <CouponHeader columnKey="code" title="Code" placeholder="Search code..." />
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-48">Description</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">Discount</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-36">Min Order</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">Usage Limit</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-32">Expiry Date</th>
+                    <th className="text-left px-4 py-3 text-xs text-gray-500 font-semibold align-top w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {couponsLoading ? (
+                    [1,2,3].map(i => (
+                      <tr key={i}>
+                        {[1,2,3,4,5,6,7].map(j => (
+                          <td key={j} className="px-4 py-4"><div className="h-4 bg-gray-100 rounded animate-pulse" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : couponsPage.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">No coupons found</td>
+                    </tr>
+                  ) : couponsPage.map((coupon: any) => (
+                    <tr key={coupon._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-bold text-gray-900 text-xs bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-100 uppercase tracking-wider">
+                          {coupon.code}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-xs truncate max-w-[200px]" title={coupon.description}>{coupon.description || '—'}</td>
+                      <td className="px-4 py-3 font-semibold text-gray-900 text-xs">
+                        {coupon.discountType === 'percentage' ? `${coupon.discountValue}%` : fmt(coupon.discountValue)}
+                        {coupon.maximumDiscountAmount && ` (Max ${fmt(coupon.maximumDiscountAmount)})`}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 font-medium text-xs">
+                        {coupon.minimumOrderAmount ? fmt(coupon.minimumOrderAmount) : 'No Min'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 text-xs">
+                        {coupon.usageLimit ? `${coupon.usageCount} / ${coupon.usageLimit}` : `${coupon.usageCount} used`}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {coupon.expiresAt ? new Date(coupon.expiresAt).toLocaleDateString() : 'Never'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setDeleteCouponTarget(coupon)}
+                          title="Delete coupon"
+                          className="flex items-center justify-center w-7 h-7 border border-gray-200 hover:border-red-400 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <CouponsPagination />
           </div>
         )}
       </div>
@@ -1617,17 +1969,28 @@ export function Admin() {
                       placeholder="Upload category image file"
                       className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none bg-white cursor-not-allowed text-gray-500"
                     />
-                    <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
-                      <Upload className="w-3.5 h-3.5" />
-                      Upload File
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleCategoryImageChange}
-                        disabled={categoryImageUploading}
-                      />
-                    </label>
+                    <div className="flex gap-2">
+                      <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-900 hover:bg-amber-600 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        {categoryImageUploading ? 'Uploading…' : 'Upload File'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleCategoryImageChange}
+                          disabled={categoryImageUploading}
+                        />
+                      </label>
+                      {categoryForm.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveCategoryImage}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" /> Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1726,6 +2089,521 @@ export function Admin() {
           </div>
         </div>
       )}
+
+      {/* ── Coupon Create Modal ── */}
+      {modalCoupon === 'new' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5 shrink-0">
+              <h3 className="text-lg font-black text-gray-900">Add New Coupon</h3>
+              <button
+                type="button"
+                onClick={() => setModalCoupon(undefined)}
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCoupon} className="space-y-4 overflow-y-auto flex-1 pr-1">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Coupon Code *</label>
+                <input
+                  type="text"
+                  required
+                  value={couponForm.code}
+                  onChange={e => setCouponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                  placeholder="e.g. SAVE50"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Description</label>
+                <textarea
+                  rows={2}
+                  value={couponForm.description}
+                  onChange={e => setCouponForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Description of the coupon..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Discount Type *</label>
+                  <select
+                    value={couponForm.discountType}
+                    onChange={e => setCouponForm(f => ({ ...f, discountType: e.target.value as 'percentage' | 'fixed' }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (₹)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Discount Value *</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={couponForm.discountValue}
+                    onChange={e => setCouponForm(f => ({ ...f, discountValue: Number(e.target.value) || 0 }))}
+                    placeholder="e.g. 10 or 100"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Min Order Amount (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={couponForm.minimumOrderAmount}
+                    onChange={e => setCouponForm(f => ({ ...f, minimumOrderAmount: Number(e.target.value) || 0 }))}
+                    placeholder="e.g. 500"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Max Discount Amount (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={couponForm.maximumDiscountAmount || ''}
+                    onChange={e => setCouponForm(f => ({ ...f, maximumDiscountAmount: e.target.value ? Number(e.target.value) : undefined }))}
+                    placeholder="e.g. 200 (optional)"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Usage Limit</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={couponForm.usageLimit || ''}
+                    onChange={e => setCouponForm(f => ({ ...f, usageLimit: e.target.value ? Number(e.target.value) : undefined }))}
+                    placeholder="Total usage limit (optional)"
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={couponForm.expiresAt}
+                    onChange={e => setCouponForm(f => ({ ...f, expiresAt: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-white"
+                  />
+                </div>
+              </div>
+              {couponFormError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {couponFormError}
+                </div>
+              )}
+              <div className="flex gap-3 pt-2 shrink-0">
+                <button
+                  type="submit"
+                  disabled={couponSaving}
+                  className="flex-1 py-3 bg-gray-900 text-white font-bold text-sm rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {couponSaving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  Create Coupon
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalCoupon(undefined)}
+                  className="px-6 py-3 border border-gray-200 text-gray-600 font-bold text-sm rounded-xl hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Coupon Confirmation ── */}
+      {deleteCouponTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 text-center mb-1">Delete Coupon?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              Coupon <span className="font-semibold text-gray-700">{deleteCouponTarget.code}</span> will be permanently removed.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteCouponTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDeleteCoupon} disabled={deleteCouponLoading}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {deleteCouponLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <ImportInventoryModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={loadData}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ImportInventoryModalProps {
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModalProps) {
+  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [error, setError] = useState<string>('');
+  const [importing, setImporting] = useState<boolean>(false);
+  const [success, setSuccess] = useState<boolean>(false);
+  const [dragActive, setDragActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if ((window as any).XLSX) return;
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  const downloadTemplate = () => {
+    const XLSX = (window as any).XLSX;
+    if (!XLSX) {
+      alert('Excel library is still loading. Please wait a moment.');
+      return;
+    }
+    
+    const data = [
+      ['SKU', 'Stock', 'Threshold'],
+      ['FRU-001', 150, 10],
+      ['DAI-001', 80, 5],
+      ['ATT-001', 200, 15]
+    ];
+    
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory Template');
+    XLSX.writeFile(workbook, 'inventory_import_template.xlsx');
+  };
+
+  const processFile = (file: File) => {
+    setError('');
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const XLSX = (window as any).XLSX;
+        if (!XLSX) {
+          setError('Excel library is still loading. Please try again in 2 seconds.');
+          return;
+        }
+        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+
+        if (rows.length < 2) {
+          setError('The uploaded file appears to be empty or contains no records.');
+          return;
+        }
+
+        // Normalize headers
+        const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase());
+        const skuIdx = headers.findIndex(h => h.includes('sku'));
+        const stockIdx = headers.findIndex(h => h.includes('stock') || h.includes('inventory') || h === 'qty' || h.includes('quantity'));
+        const thresholdIdx = headers.findIndex(h => h.includes('threshold') || h.includes('alert') || h.includes('limit'));
+
+        if (skuIdx === -1) {
+          setError('Could not find a column containing "SKU" in the header row.');
+          return;
+        }
+        if (stockIdx === -1) {
+          setError('Could not find a column containing "Stock", "Inventory", or "Qty" in the header row.');
+          return;
+        }
+
+        const parsed: any[] = [];
+        for (let i = 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.length === 0) continue;
+
+          const sku = String(row[skuIdx] || '').trim().toUpperCase();
+          const rawStock = row[stockIdx];
+          const inventory = parseInt(String(rawStock), 10);
+
+          if (!sku && rawStock === undefined) continue;
+
+          const item: any = { sku, inventory };
+
+          if (thresholdIdx !== -1) {
+            const rawThr = row[thresholdIdx];
+            if (rawThr !== undefined && rawThr !== null && String(rawThr).trim() !== '') {
+              const thr = parseInt(String(rawThr), 10);
+              if (!isNaN(thr)) {
+                item.lowStockThreshold = thr;
+              }
+            }
+          }
+
+          // Validation
+          const skuRegex = /^[A-Z]{3}-\d{3}$/;
+          if (!sku) {
+            item.status = 'invalid';
+            item.error = 'Missing SKU';
+          } else if (!skuRegex.test(sku)) {
+            item.status = 'invalid';
+            item.error = 'Invalid SKU format (expected AAA-000)';
+          } else if (isNaN(inventory) || inventory < 0) {
+            item.status = 'invalid';
+            item.error = 'Stock must be a non-negative integer';
+          } else {
+            item.status = 'valid';
+          }
+
+          parsed.push(item);
+        }
+
+        if (parsed.length === 0) {
+          setError('No valid rows found in the sheet.');
+        } else {
+          setParsedData(parsed);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Error parsing file.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleImport = async () => {
+    const validUpdates = parsedData.filter(d => d.status === 'valid');
+    if (validUpdates.length === 0) {
+      setError('No valid rows to import.');
+      return;
+    }
+
+    setImporting(true);
+    setError('');
+    try {
+      const res = await productApi.bulkUpdateInventory(validUpdates.map(u => ({
+        sku: u.sku,
+        inventory: u.inventory,
+        lowStockThreshold: u.lowStockThreshold
+      })));
+
+      if (res.success) {
+        const resultsMap = new Map(res.results.map((r: any) => [r.sku, r]));
+        const updatedData = parsedData.map(item => {
+          const resItem = resultsMap.get(item.sku);
+          if (resItem) {
+            if (resItem.success) {
+              return { ...item, status: 'success' };
+            } else {
+              return { ...item, status: 'failed', error: resItem.error || 'Update failed' };
+            }
+          }
+          return item;
+        });
+
+        setParsedData(updatedData);
+        setSuccess(true);
+        onSuccess();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Import request failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const validCount = parsedData.filter(d => d.status === 'valid' || d.status === 'success').length;
+  const invalidCount = parsedData.filter(d => d.status === 'invalid' || d.status === 'failed').length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform transition-all duration-300 scale-100">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-black text-gray-900">Import Inventory</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Upload a CSV, XLSX, or XLS file matching SKU and Stock values</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+          
+          {parsedData.length === 0 ? (
+            /* Upload box */
+            <div
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center text-center transition-all ${
+                dragActive ? 'border-amber-500 bg-amber-50/30' : 'border-gray-200 hover:border-amber-400'
+              }`}
+            >
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-4">
+                <Upload className="w-6 h-6 text-amber-500 animate-pulse" />
+              </div>
+              <p className="font-bold text-gray-950 text-sm">Drag and drop your spreadsheet here</p>
+              <p className="text-xs text-gray-400 mt-1 mb-5">Supports .xlsx, .xls, and .csv files up to 10MB</p>
+              
+              <label className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm">
+                Select File
+                <input
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="text-xs text-amber-600 hover:text-amber-700 font-bold hover:underline flex items-center gap-1 mt-4"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Sample Template (.xlsx)
+              </button>
+            </div>
+          ) : (
+            /* Table Preview */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-600 bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <span className="flex items-center gap-1.5 text-emerald-600">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  {validCount} Rows to Import
+                </span>
+                {invalidCount > 0 && (
+                  <span className="flex items-center gap-1.5 text-red-500">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    {invalidCount} Rows with errors (will be ignored)
+                  </span>
+                )}
+                <button
+                  onClick={() => { setParsedData([]); setError(''); setSuccess(false); }}
+                  className="text-amber-600 hover:underline"
+                >
+                  Upload different file
+                </button>
+              </div>
+
+              <div className="border border-gray-100 rounded-xl overflow-hidden max-h-[40vh] overflow-y-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2.5">SKU</th>
+                      <th className="px-4 py-2.5">New Stock</th>
+                      <th className="px-4 py-2.5">Threshold</th>
+                      <th className="px-4 py-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {parsedData.map((row, idx) => (
+                      <tr key={idx} className={row.status === 'invalid' || row.status === 'failed' ? 'bg-red-50/20' : ''}>
+                        <td className="px-4 py-2 font-mono font-bold text-gray-950">{row.sku || '—'}</td>
+                        <td className="px-4 py-2 font-bold text-gray-700">{row.inventory}</td>
+                        <td className="px-4 py-2 text-gray-400">{row.lowStockThreshold ?? '—'}</td>
+                        <td className="px-4 py-2">
+                          {row.status === 'valid' && (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-full text-[10px]">Valid</span>
+                          )}
+                          {row.status === 'invalid' && (
+                            <span className="px-2 py-0.5 bg-red-50 text-red-600 font-bold rounded-full text-[10px]" title={row.error}>{row.error || 'Invalid'}</span>
+                          )}
+                          {row.status === 'success' && (
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 font-bold rounded-full text-[10px]">Imported</span>
+                          )}
+                          {row.status === 'failed' && (
+                            <span className="px-2 py-0.5 bg-red-100 text-red-700 font-bold rounded-full text-[10px]" title={row.error}>{row.error || 'Failed'}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-xs text-emerald-700 font-bold">
+              Inventory import completed successfully! Check the table above for details.
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            {success ? 'Close' : 'Cancel'}
+          </button>
+          
+          {parsedData.length > 0 && !success && (
+            <button
+              onClick={handleImport}
+              disabled={importing || validCount === 0}
+              className="px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {importing && <Loader className="w-4 h-4 animate-spin" />}
+              Confirm Import
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from '../lib/router';
-import { ArrowRight, Award, Globe, Leaf, Users, Zap, Building2, FileText, MapPin, Calendar, Mail, Phone, Send, CheckCircle } from 'lucide-react';
+import { ArrowRight, Award, Globe, Leaf, Users, Zap, Building2, FileText, MapPin, ShoppingBag, Calendar, Mail, Phone, Send, CheckCircle } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -16,7 +16,7 @@ const customIcon = new L.Icon({
 });
 
 // BLIPZO office coordinates — Dogra Hall, Rehari Mohalla, Jammu
-const OFFICE_LOCATION: [number, number] = [32.7304691, 74.8194695];
+const OFFICE_LOCATION: [number, number] = [30.6667687, 76.8115209];
 
 const TEAM = [
   { name: 'Sanchit Sawhney', role: 'Director', location: 'Jammu & Kashmir' },
@@ -34,13 +34,14 @@ const COMPANY_DETAILS = [
   { icon: Building2, label: 'Legal Name', value: 'BLIPZO INNOVATIONS PRIVATE LIMITED' },
   { icon: FileText, label: 'CIN', value: 'U52109JK2026PTC019140' },
   { icon: Calendar, label: 'Date of Incorporation', value: 'April 27, 2026' },
-  { icon: MapPin, label: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005' },
+  { icon: MapPin, label: 'Registered Office', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005' },
 ];
 
 const CONTACT_INFO = [
   { icon: Mail, title: 'Email', value: '2804blipzoinnovationptv@gmail.com', sub: 'We reply within 24 hours' },
   { icon: Phone, title: 'Phone', value: '+91 7006464761, +91 8899590378', sub: 'Mon-Sat, 10am-6pm IST' },
   { icon: MapPin, title: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005', sub: 'Headquarters' },
+  { icon: ShoppingBag, title: 'Store Location', value: 'Ramada Plaza by Wyndham, Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603', sub: 'Store Location' },
 ];
 
 export function About() {
@@ -72,32 +73,32 @@ export function About() {
             <span className="text-xl font-black text-gray-900 tracking-tight">BLIPZO</span>
           </div>
           <div className="flex items-center gap-6">
-            <div className="hidden sm:flex items-center gap-6 mr-2">
+            <div className="flex items-center gap-6 mr-2">
               <button
                 onClick={() => navigate('/about')}
                 className="text-sm font-semibold text-amber-600 transition-colors"
               >
                 About
               </button>
-              <a
+              {/* <a
                 href="#contact"
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Contact
-              </a>
+              </a> */}
             </div>
             <div className="flex items-center gap-3">
-              <button
+              {/* <button
                 onClick={() => navigate('/auth')}
                 className="px-4 py-2 text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors"
               >
                 Sign In
-              </button>
+              </button> */}
               <button
                 onClick={() => navigate('/auth')}
                 className="px-5 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-amber-600 transition-colors shadow-sm"
               >
-                Get Started
+                Let's Shop!
               </button>
             </div>
           </div>

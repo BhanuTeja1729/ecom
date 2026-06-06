@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { Order } from '../models/Order';
 import { Product } from '../models/Product';
 import { createError } from '../middleware/error';
+import { Setting } from '../models/Setting';
 
 export async function getProfile(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
@@ -17,6 +18,7 @@ const updateProfileSchema = z.object({
   fullName: z.string().min(2).max(100).optional(),
   phone: z.string().optional(),
   avatarUrl: z.string().optional(),
+  upiId: z.string().trim().max(100).optional(),
   shippingAddress: z.object({
     fullName: z.string().optional(),
     email: z.string().optional(),
@@ -33,7 +35,9 @@ const updateProfileSchema = z.object({
 export async function updateProfile(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const data = updateProfileSchema.parse(req.body);
+    console.log('[updateProfile] Updating profile for user:', req.user.id, 'with data:', data);
     const user = await User.findByIdAndUpdate(req.user.id, data, { new: true }).lean();
+    console.log('[updateProfile] Updated user document:', user);
     res.json({ success: true, data: user });
   } catch (err) { next(err); }
 }
@@ -167,6 +171,31 @@ export async function getCustomers(req: Request, res: Response, next: NextFuncti
 
 export async function getDeliveryPartners(req: Request, res: Response, next: NextFunction) {
   try {
+    // Run dynamic migration for any orders missing delivery distance or payout using updateOne (bypasses validation)
+    try {
+      const missingOrders = await Order.find({
+        $or: [
+          { deliveryDistanceKm: { $exists: false } },
+          { deliveryDistanceKm: null },
+          { deliveryPayout: { $exists: false } },
+          { deliveryPayout: null }
+        ]
+      });
+      if (missingOrders.length > 0) {
+        const rate = await Setting.findOne({ key: 'flatDeliveryPayout' });
+        const rateVal = rate ? rate.value : 50;
+        for (const order of missingOrders) {
+          const distance = order.deliveryDistanceKm ?? 5.0;
+          await Order.updateOne(
+            { _id: order._id },
+            { $set: { deliveryDistanceKm: distance, deliveryPayout: rateVal } }
+          );
+        }
+      }
+    } catch (migErr) {
+      console.error('[Migration] Dynamic update in admin failed:', migErr);
+    }
+
     const partners = await User.find({ role: 'delivery_partner' }).sort({ createdAt: -1 }).lean();
 
     // Aggregate delivery stats for all partners
@@ -178,6 +207,47 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
           _id: '$assignedDeliveryPartner',
           completedCount: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
           activeCount: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipped']] }, 1, 0] } },
+          totalEarnings: {
+            $sum: {
+              $cond: [
+                { $eq: ['$status', 'delivered'] },
+                { $ifNull: ['$deliveryPayout', 0] },
+                0
+              ]
+            }
+          },
+          unpaidEarnings: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status', 'delivered'] },
+                    { $ne: ['$deliveryPayoutStatus', 'paid'] }
+                  ]
+                },
+                { $ifNull: ['$deliveryPayout', 0] },
+                0
+              ]
+            }
+          },
+          cashInHand: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'with_partner'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
+          },
+          cashRemitted: {
+            $sum: {
+              $cond: [
+                { $eq: ['$codCashStatus', 'remitted'] },
+                { $ifNull: ['$codAmount', 0] },
+                0
+              ]
+            }
+          }
         },
       },
     ]);
@@ -185,12 +255,14 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
     const statsMap: Record<string, any> = {};
     deliveryStats.forEach(s => { statsMap[s._id.toString()] = s; });
 
-    const earningsPerDelivery = 75;
     const data = partners.map(p => ({
       ...p,
       completedDeliveries: statsMap[p._id.toString()]?.completedCount ?? 0,
       activeDeliveries: statsMap[p._id.toString()]?.activeCount ?? 0,
-      totalEarnings: (statsMap[p._id.toString()]?.completedCount ?? 0) * earningsPerDelivery,
+      totalEarnings: statsMap[p._id.toString()]?.totalEarnings ?? 0,
+      unpaidEarnings: statsMap[p._id.toString()]?.unpaidEarnings ?? 0,
+      cashInHand: statsMap[p._id.toString()]?.cashInHand ?? 0,
+      cashRemitted: statsMap[p._id.toString()]?.cashRemitted ?? 0,
     }));
 
     res.json({ success: true, data });
@@ -298,6 +370,8 @@ const addressBodySchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 export async function addAddress(req: Request & { user?: any }, res: Response, next: NextFunction) {
@@ -333,5 +407,90 @@ export async function deleteAddress(req: Request & { user?: any }, res: Response
     addr.deleteOne();
     await user.save();
     res.json({ success: true, data: user.addresses });
+  } catch (err) { next(err); }
+}
+
+export async function getDeliveryRate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rate = await Setting.findOne({ key: 'flatDeliveryPayout' });
+    res.json({ success: true, data: rate ? rate.value : 50 }); // default to ₹50
+  } catch (err) { next(err); }
+}
+
+export async function updateDeliveryRate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { rate } = z.object({ rate: z.number().min(0) }).parse(req.body);
+    await Setting.findOneAndUpdate(
+      { key: 'flatDeliveryPayout' },
+      { value: rate },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: 'Flat delivery payout updated successfully', data: rate });
+  } catch (err) { next(err); }
+}
+
+export async function payDeliveryPartnerSalary(req: Request, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.params.id;
+    const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    // Update all delivered, unpaid orders of this partner to paid
+    const result = await Order.updateMany(
+      { assignedDeliveryPartner: partnerId, status: 'delivered', deliveryPayoutStatus: { $ne: 'paid' } },
+      { $set: { deliveryPayoutStatus: 'paid' } }
+    );
+
+    res.json({
+      success: true,
+      message: `Salary paid successfully. Updated ${result.modifiedCount} orders.`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (err) { next(err); }
+}
+
+// ─── Admin: Record COD Cash Remittance ──────────────────────────────────────
+
+export async function recordRemittance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.params.id;
+    const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    // Find all orders where this partner is still holding the customer's COD cash
+    const pendingOrders = await Order.find({
+      assignedDeliveryPartner: partnerId,
+      status: 'delivered',
+      codCashStatus: 'with_partner',
+    });
+
+    if (pendingOrders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending COD cash remittance found for this partner.',
+        remittedCount: 0,
+        totalCash: 0,
+      });
+    }
+
+    // Calculate the total cash being remitted
+    const totalCash = pendingOrders.reduce((sum, o) => sum + (o.codAmount ?? o.total ?? 0), 0);
+
+    // Mark all as remitted
+    const result = await Order.updateMany(
+      {
+        assignedDeliveryPartner: partnerId,
+        status: 'delivered',
+        codCashStatus: 'with_partner',
+      },
+      { $set: { codCashStatus: 'remitted' } }
+    );
+
+    res.json({
+      success: true,
+      message: `Cash remittance recorded. ${result.modifiedCount} order(s) cleared, total ₹${totalCash}.`,
+      remittedCount: result.modifiedCount,
+      totalCash,
+    });
   } catch (err) { next(err); }
 }

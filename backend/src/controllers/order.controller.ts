@@ -5,30 +5,34 @@ import { Cart } from '../models/Cart';
 import { Product } from '../models/Product';
 import { Coupon } from '../models/Coupon';
 import { createError } from '../middleware/error';
+import { getSettingValue } from '../models/Setting';
 import { generateOrderNumber, calculateOrderTotals } from '../utils/helpers';
 
 const addressSchema = z.object({
   fullName: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
+  doorNo: z.string().optional(),
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
+  landmark: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 const checkoutSchema = z.object({
   shippingAddress: addressSchema,
   billingAddress: addressSchema.optional(),
-  paymentMethod: z.string(),
+  paymentMethod: z.string().default('cod'),
   couponCode: z.string().optional(),
   notes: z.string().optional(),
-  razorpayPaymentId: z.string().optional(),
-  razorpayOrderId: z.string().optional(),
   scheduledDeliveryDate: z.string().optional(),
   scheduledDeliverySlot: z.string().optional(),
+  deliveryDistance: z.number().optional(),
   items: z.array(z.object({
     productId: z.string(),
     variantId: z.string().optional().nullable(),
@@ -106,24 +110,39 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
     if (couponCode) {
       const coupon = await Coupon.findOne({ code: couponCode, isActive: true });
       if (coupon && (!coupon.expiresAt || coupon.expiresAt > new Date())) {
+        if (req.user && coupon.usedBy && coupon.usedBy.map((id: any) => id.toString()).includes(req.user.id)) {
+          throw createError('You have already used this coupon', 400);
+        }
         const subtotal = orderItems.reduce((s, i) => s + i.total, 0);
+        if (coupon.minimumOrderAmount && subtotal < coupon.minimumOrderAmount) {
+          throw createError(`Minimum order amount of ₹${coupon.minimumOrderAmount} is required for this coupon`, 400);
+        }
         if (coupon.discountType === 'percentage') {
           discountAmount = (subtotal * coupon.discountValue) / 100;
           if (coupon.maximumDiscountAmount) discountAmount = Math.min(discountAmount, coupon.maximumDiscountAmount);
         } else {
           discountAmount = coupon.discountValue;
         }
-        await Coupon.findByIdAndUpdate(coupon._id, { $inc: { usageCount: 1 } });
+        const couponUpdate: any = { $inc: { usageCount: 1 } };
+        if (req.user?.id) {
+          couponUpdate.$push = { usedBy: req.user.id };
+        }
+        await Coupon.findByIdAndUpdate(coupon._id, couponUpdate);
       }
     }
 
-    const shippingAmount = 99; // Fixed shipping for now
+    const calculatedSubtotal = orderItems.reduce((s, i) => s + i.total, 0);
+    const shippingAmount = calculatedSubtotal >= 999 ? 0 : 49;
     const { subtotal, taxAmount, total } = calculateOrderTotals(
       orderItems.map((i) => ({ price: i.price, quantity: i.quantity })),
       discountAmount,
       shippingAmount
     );
 
+    const deliveryDistance = data.deliveryDistance ?? 0;
+    const deliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
+
+    // COD orders are confirmed immediately — payment collected on delivery
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       user: req.user?.id,
@@ -137,15 +156,19 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       couponCode,
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
-      paymentMethod: data.paymentMethod,
-      status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending',
-      paymentStatus: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'paid' : 'pending',
-      razorpayPaymentId: data.razorpayPaymentId,
-      razorpayOrderId: data.razorpayOrderId,
+      paymentMethod: 'cod',
+      status: 'confirmed',
+      paymentStatus: 'pending', // Collected on delivery
       scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
       scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
-      statusHistory: [{ status: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? 'confirmed' : 'pending', message: (data.razorpayPaymentId || data.paymentMethod === 'test_bypass') ? (data.paymentMethod === 'test_bypass' ? 'Test order — payment bypassed' : 'Payment received via Razorpay') : 'Order placed', timestamp: new Date() }],
+      deliveryDistanceKm: deliveryDistance,
+      deliveryPayout,
+      statusHistory: [{
+        status: 'confirmed',
+        message: 'Order placed successfully. Pay cash on delivery.',
+        timestamp: new Date(),
+      }],
     });
 
     // Reduce inventory

@@ -9,12 +9,12 @@ import { useRouter } from '../lib/router';
 const TRUST_FEATURES = [
   { icon: Shield, title: 'Secure Checkout', desc: '256-bit SSL encryption on all transactions' },
   { icon: Truck, title: 'Free Shipping', desc: 'Complimentary shipping on orders over $75' },
-  { icon: RotateCcw, title: '30-Day Returns', desc: 'Hassle-free returns, no questions asked' },
+  { icon: RotateCcw, title: '7-Day Returns', desc: 'Hassle-free returns, no questions asked' },
   { icon: Phone, title: '24/7 Support', desc: 'World-class customer support always available' },
 ];
 
 const STATS = [
-  { value: '50K+', label: 'Happy Customers' },
+  { value: '600+', label: 'Happy Customers' },
   { value: '4.9', label: 'Average Rating' },
   { value: '500+', label: 'Premium Products' },
   { value: '99%', label: 'Satisfaction Rate' },

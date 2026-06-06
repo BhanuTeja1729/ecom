@@ -15,6 +15,8 @@ export interface IAddress {
   state?: string;
   postalCode?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface IUser extends Document {
@@ -34,6 +36,7 @@ export interface IUser extends Document {
   refreshTokens: string[];
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
+  upiId?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -52,6 +55,8 @@ const AddressSchema = new Schema<IAddress>({
   state: String,
   postalCode: String,
   country: String,
+  latitude: Number,
+  longitude: Number,
 }, { _id: true });
 
 const UserSchema = new Schema<IUser>({
@@ -71,6 +76,7 @@ const UserSchema = new Schema<IUser>({
   refreshTokens: [String],
   resetPasswordToken: String,
   resetPasswordExpires: Date,
+  upiId: { type: String, trim: true },
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {

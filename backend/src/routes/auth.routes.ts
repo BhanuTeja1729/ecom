@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, refresh, logout, getMe, googleAuth, auth0Auth, forgotPassword, resetPassword, sendOtp, verifyOtp } from '../controllers/auth.controller';
+import { register, login, refresh, logout, getMe, googleAuth, auth0Auth, forgotPassword, resetPassword, sendOtp, verifyOtp, updatePassword } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -15,6 +15,7 @@ router.post('/logout', logout);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.get('/me', authenticate, getMe);
+router.put('/update-password', authenticate, updatePassword);
 
 export default router;
 

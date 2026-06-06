@@ -9,6 +9,46 @@ interface SendEmailOptions {
 }
 
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
+  // 1. Check if Resend API Key is configured
+  if (env.RESEND_API_KEY) {
+    let sender = env.EMAIL_FROM || 'onboarding@resend.dev';
+    // Resend sandbox account restriction requires using onboarding@resend.dev
+    if (sender.endsWith('@gmail.com') || sender.includes('noreply@blipzo.com')) {
+      sender = 'onboarding@resend.dev';
+    }
+
+    console.log(`📧 Sending email via Resend API to: ${options.email}`);
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `BLIPZO <${sender}>`,
+          to: [options.email],
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Resend API error (${response.status}): ${JSON.stringify(errorData)}`);
+      }
+
+      const responseData = await response.json() as { id: string };
+      console.log(`✅ Email sent successfully via Resend. ID: ${responseData.id}`);
+      return;
+    } catch (error) {
+      console.error('❌ Failed to send email via Resend API:', error);
+      throw error;
+    }
+  }
+
+  // 2. Fallback to standard SMTP
   const host = env.SMTP_HOST;
   const port = env.SMTP_PORT ? parseInt(env.SMTP_PORT, 10) : 587;
   const user = env.SMTP_USER;

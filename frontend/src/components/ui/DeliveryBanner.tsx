@@ -62,13 +62,8 @@ export function DeliveryBanner({ compact, overrideDistance, overrideAvailable, c
         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
         <div className="flex-1">
           <span className="text-sm font-semibold text-emerald-800">
-            Delivery available to your area
+            Delivery available to your location. And available only in Jammu.
           </span>
-          {distance !== null && (
-            <span className="text-xs text-emerald-600 ml-1.5">
-              ({distance} km from warehouse)
-            </span>
-          )}
         </div>
       </div>
     );
