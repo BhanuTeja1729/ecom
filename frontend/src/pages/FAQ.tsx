@@ -11,13 +11,13 @@ export const FAQS = [
       { q: 'Do you offer free delivery?', a: 'We offer free delivery on all orders over ₹999. For orders under ₹999, a nominal delivery fee of ₹49 applies depending on your location.' },
       { q: 'Can I track my order?', a: 'Yes! You can track your order in real-time. Once your order is placed, you can view the live status of the delivery partner on a map under the Orders tab in your dashboard.' },
       { q: 'Where do you deliver?', a: 'We currently deliver across Jammu in India. Enter your delivery address on checkout or addresses panel to check availability in your locality.' },
-      { q: 'Can I change or cancel my order?', a: 'Because we pack and dispatch orders immediately to meet the 10-minute window, orders can only be cancelled within 60 seconds of placement. After that, they enter the packing phase and cannot be cancelled.' },
+      { q: 'Can I change or cancel my order?', a: "Right now we don't accept cancellations." },
     ]
   },
   {
     category: 'Returns & Refunds',
     items: [
-      { q: 'What is your return policy?', a: 'We offer instant replacements or returns on perishables and fresh items (groceries, fruits, vegetables, dairy) within 24 hours if the quality is not up to the mark. For packaged non-perishable goods, returns are accepted within 7 days in original condition.' },
+      { q: 'What is your return policy?', a: 'Post gateway and online payment integration, we offer instant replacements or returns on perishables and fresh items (groceries, fruits, vegetables, dairy) within 24 hours if the quality is not up to the mark. For packaged non-perishable goods, returns are accepted within 7 days in original condition.' },
       { q: 'How long do refunds take?', a: 'Refunds are initiated immediately upon cancellation or approval of your return. UPI/Wallet refunds show up within 2-3 business days depending on your bank.' },
       { q: 'What items cannot be returned?', a: 'For hygiene and safety reasons, once opened, personal care products, baby care essentials, and items marked as "Non-Returnable" cannot be returned unless they are damaged or defective on arrival.' },
     ]

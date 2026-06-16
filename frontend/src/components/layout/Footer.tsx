@@ -12,7 +12,7 @@ const LINKS = {
   Company: [
     { label: 'About Us', href: '/about' },
     { label: 'Privacy Policy', href: '/privacy' },
-    { label: 'Terms of Service', href: '/terms' },
+    { label: 'Terms & Conditions', href: '/terms' },
   ],
 };
 
@@ -78,7 +78,7 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>
-            <Link to="/terms" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms</Link>
+            <Link to="/terms" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms & Conditions</Link>
           </div>
         </div>
       </div>

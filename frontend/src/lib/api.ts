@@ -235,6 +235,13 @@ export const mediaApi = {
   remove: (publicId: string) => api.post<{ success: boolean }>('/media/delete', { publicId }),
 };
 
+// ─── Contact ─────────────────────────────────────────────────────────────────
+export const contactApi = {
+  submit: (body: { name: string; email: string; subject: string; message: string }) =>
+    api.post<{ success: boolean; message: string }>('/contact', body),
+};
+
+
 export interface UserData {
   _id: string;
   id?: string;

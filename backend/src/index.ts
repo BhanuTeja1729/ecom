@@ -24,6 +24,7 @@ import mediaRoutes from './routes/media.routes';
 import couponRoutes from './routes/coupon.routes';
 import routeRoutes from './routes/route.routes';
 import deliveryRoutes from './routes/delivery.routes';
+import contactRoutes from './routes/contact.routes';
 
 
 
@@ -99,6 +100,7 @@ app.use(`${BASE}/delivery`, deliveryRoutes);
 app.use(`${BASE}/media`, mediaRoutes);
 app.use(`${BASE}/coupons`, couponRoutes);
 app.use(`${BASE}/routes`, routeRoutes);
+app.use(`${BASE}/contact`, contactRoutes);
 
 
 // ─── Serve Frontend (production) ────────────────────────────────────────────
