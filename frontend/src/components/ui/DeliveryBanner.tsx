@@ -1,5 +1,6 @@
 import { MapPin, AlertTriangle, CheckCircle2, Navigation } from 'lucide-react';
 import { useLocation } from '../../contexts/LocationContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DeliveryBannerProps {
   /** Compact mode for embedding inside cards/sections */
@@ -11,8 +12,48 @@ interface DeliveryBannerProps {
   checking?: boolean;
 }
 
+export function TrendingMarquee({ compact }: { compact?: boolean }) {
+  return (
+    <div className={`relative overflow-hidden ${compact ? 'py-2' : 'py-3'} bg-white border border-gray-200 text-gray-700 rounded-2xl shadow-sm flex items-center h-11`}>
+      <style>{`
+        @keyframes ticker {
+          0% { transform: translate3d(0, 0, 0); }
+          100% { transform: translate3d(-100%, 0, 0); }
+        }
+        .ticker-wrap {
+          display: flex;
+          width: 100%;
+          overflow: hidden;
+        }
+        .ticker-move {
+          display: inline-block;
+          white-space: nowrap;
+          padding-left: 100%;
+          animation: ticker 25s linear infinite;
+        }
+        .ticker-item {
+          display: inline-block;
+          font-size: 0.875rem;
+          font-weight: 800;
+          letter-spacing: 0.025em;
+        }
+      `}</style>
+      
+      <div className="ticker-wrap">
+        <div className="ticker-move">
+          <span className="ticker-item text-gray-700">⚡ Notice: Delivery services are currently available exclusively within Zirakpur, Punjab</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DeliveryBanner({ compact, overrideDistance, overrideAvailable, checking }: DeliveryBannerProps) {
   const { locationStatus, distanceFromInventory, isDeliveryAvailable, requestLocation, deliveryRadiusKm } = useLocation();
+  const { user } = useAuth();
+
+  // If the user is not logged in, do not render location detection banner
+  if (!user) return null;
 
   // Use overrides if provided (e.g., from shipping address geocode)
   const distance = overrideDistance !== undefined ? overrideDistance : distanceFromInventory;
@@ -62,7 +103,7 @@ export function DeliveryBanner({ compact, overrideDistance, overrideAvailable, c
         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
         <div className="flex-1">
           <span className="text-sm font-semibold text-emerald-800">
-            Delivery available to your location. And available only in Jammu.
+            Delivery available to your location. And available only in Zirakpur, Punjab.
           </span>
         </div>
       </div>

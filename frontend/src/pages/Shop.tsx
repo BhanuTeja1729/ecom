@@ -4,7 +4,7 @@ import { productApi, categoryApi } from '../lib/api';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter, Link } from '../lib/router';
-import { DeliveryBanner } from '../components/ui/DeliveryBanner';
+import { DeliveryBanner, TrendingMarquee } from '../components/ui/DeliveryBanner';
 import { PageFooter } from '../components/layout/PageFooter';
 
 /* ─── tiny helper to scroll a ref left / right ─────────────────────────── */
@@ -268,14 +268,15 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
 
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Delivery availability banner */}
-        <div className="mb-6">
+        {/* Delivery announcement & availability banners */}
+        <div className="mb-6 space-y-3">
+          <TrendingMarquee />
           <DeliveryBanner />
         </div>
 
         {/* Advertising Banners (only show on home/default view) */}
         {!activeCategory && !search && (
-          <div className="mb-8 space-y-4">
+          <div className="mb-8">
             {/* Main Hero Banner */}
             <div 
               onClick={() => setActiveCategory('fruits-vegetables')}
@@ -306,93 +307,6 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
                   alt="Daily Essentials Collage" 
                   className="h-[90%] w-full object-contain transform group-hover:scale-105 transition-transform duration-500"
                 />
-              </div>
-            </div>
-
-            {/* Sub-grid of 3 Banners */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Pharmacy Card */}
-              <div 
-                onClick={() => setActiveCategory('pharma-wellness')}
-                className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-teal-600 to-teal-500 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer group h-[140px] md:h-[160px]"
-              >
-                <div className="absolute inset-0 flex items-center px-5 z-10">
-                  <div className="max-w-[60%] text-left">
-                    <h3 className="text-base md:text-lg font-black text-white leading-snug">
-                      Pharmacy at your doorstep!
-                    </h3>
-                    <p className="text-[11px] md:text-xs text-teal-50/95 mt-1 font-semibold leading-tight">
-                      Cough syrups, pain relief sprays & more
-                    </p>
-                    <button className="mt-3 bg-gray-900 hover:bg-gray-800 text-white px-4 py-1.5 rounded-full font-bold text-[10px] md:text-xs transition-colors shadow-sm">
-                      Order Now
-                    </button>
-                  </div>
-                </div>
-                {/* Image */}
-                <div className="absolute right-2 bottom-0 top-0 w-[35%] flex items-center justify-center pointer-events-none select-none">
-                  <img 
-                    src="https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=400&q=80" 
-                    alt="Pharmacy Essentials" 
-                    className="h-[80%] w-full object-contain rounded-lg transform group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-              </div>
-
-              {/* Pet Care Card */}
-              <div 
-                onClick={() => setActiveCategory('pet-care')}
-                className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer group h-[140px] md:h-[160px]"
-              >
-                <div className="absolute inset-0 flex items-center px-5 z-10">
-                  <div className="max-w-[60%] text-left">
-                    <h3 className="text-base md:text-lg font-black text-white leading-snug">
-                      Pet care supplies at your door
-                    </h3>
-                    <p className="text-[11px] md:text-xs text-amber-50/95 mt-1 font-semibold leading-tight">
-                      Food, treats, toys & more
-                    </p>
-                    <button className="mt-3 bg-gray-900 hover:bg-gray-800 text-white px-4 py-1.5 rounded-full font-bold text-[10px] md:text-xs transition-colors shadow-sm">
-                      Order Now
-                    </button>
-                  </div>
-                </div>
-                {/* Image */}
-                <div className="absolute right-2 bottom-0 top-0 w-[35%] flex items-center justify-center pointer-events-none select-none">
-                  <img 
-                    src="https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?auto=format&fit=crop&w=400&q=80" 
-                    alt="Pet Care Supplies" 
-                    className="h-[80%] w-full object-contain rounded-lg transform group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-              </div>
-
-              {/* Baby Care Card */}
-              <div 
-                onClick={() => setActiveCategory('baby-care')}
-                className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-500 to-indigo-400 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer group h-[140px] md:h-[160px]"
-              >
-                <div className="absolute inset-0 flex items-center px-5 z-10">
-                  <div className="max-w-[60%] text-left">
-                    <h3 className="text-base md:text-lg font-black text-white leading-snug">
-                      No time for a diaper run?
-                    </h3>
-                    <p className="text-[11px] md:text-xs text-indigo-50/95 mt-1 font-semibold leading-tight">
-                      Get baby care essentials
-                    </p>
-                    <button className="mt-3 bg-gray-900 hover:bg-gray-800 text-white px-4 py-1.5 rounded-full font-bold text-[10px] md:text-xs transition-colors shadow-sm">
-                      Order Now
-                    </button>
-                  </div>
-                </div>
-                {/* Image */}
-                <div className="absolute right-2 bottom-0 top-0 w-[35%] flex items-center justify-center pointer-events-none select-none">
-                  <img 
-                    src="https://images.unsplash.com/photo-1519689680058-324335c77ebe?auto=format&fit=crop&w=400&q=80" 
-                    alt="Baby Care Essentials" 
-                    className="h-[80%] w-full object-contain rounded-lg transform group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
               </div>
             </div>
           </div>

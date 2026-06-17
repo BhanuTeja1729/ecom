@@ -1,4 +1,4 @@
-import { Mail, Phone, MapPin, Zap } from 'lucide-react';
+import { Mail, Phone, MapPin, Zap, FileText } from 'lucide-react';
 import { Link, useRouter } from '../../lib/router';
 
 const USEFUL_LINKS = [
@@ -54,7 +54,13 @@ export function PageFooter() {
                 <Phone className="w-3.5 h-3.5 shrink-0" /> +91 7006464761, +91 8899590378
               </a>
               <span className="flex items-start gap-2 text-xs text-gray-500">
-                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <strong>Office:</strong> Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005
+              </span>
+              <span className="flex items-start gap-2 text-xs text-gray-500">
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" /> <strong>Store:</strong> Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603
+              </span>
+              <span className="flex items-center gap-2 text-xs text-gray-500">
+                <FileText className="w-3.5 h-3.5 shrink-0" /> GSTIN: 01AAOCB6938R1ZZ
               </span>
             </div>
           </div>

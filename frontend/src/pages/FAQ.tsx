@@ -7,10 +7,10 @@ export const FAQS = [
   {
     category: 'Orders & Delivery',
     items: [
-      { q: 'How long does delivery take?', a: 'We deliver within 2-4 hours! Under peak traffic or bad weather, it might take a bit longer, but our riders always prioritize fast and safe deliveries.' },
+      { q: 'How long does delivery take?', a: 'We operate on a scheduled delivery model. During checkout, you can select your preferred delivery date and time slot, and our riders will ensure your order is delivered within that scheduled window.' },
       { q: 'Do you offer free delivery?', a: 'We offer free delivery on all orders over ₹999. For orders under ₹999, a nominal delivery fee of ₹49 applies depending on your location.' },
       { q: 'Can I track my order?', a: 'Yes! You can track your order in real-time. Once your order is placed, you can view the live status of the delivery partner on a map under the Orders tab in your dashboard.' },
-      { q: 'Where do you deliver?', a: 'We currently deliver across Jammu in India. Enter your delivery address on checkout or addresses panel to check availability in your locality.' },
+      { q: 'Where do you deliver?', a: 'We deliver within a 12 km radius of our store location in Zirakpur, Punjab. Enter your delivery address at checkout or in your address panel to verify availability in your exact area.' },
       { q: 'Can I change or cancel my order?', a: "Right now we don't accept cancellations." },
     ]
   },
@@ -18,7 +18,7 @@ export const FAQS = [
     category: 'Returns & Refunds',
     items: [
       { q: 'What is your return policy?', a: 'Post gateway and online payment integration, we offer instant replacements or returns on perishables and fresh items (groceries, fruits, vegetables, dairy) within 24 hours if the quality is not up to the mark. For packaged non-perishable goods, returns are accepted within 7 days in original condition.' },
-      { q: 'How long do refunds take?', a: 'Refunds are initiated immediately upon cancellation or approval of your return. UPI/Wallet refunds show up within 2-3 business days depending on your bank.' },
+      { q: 'How long do refunds take?', a: 'Since we currently support only Cash on Delivery (COD), no online transactions occur, so refunds are not needed for cancellations. For product returns or price adjustments, we will handle replacements directly or adjust the balance in cash through our delivery partner.' },
       { q: 'What items cannot be returned?', a: 'For hygiene and safety reasons, once opened, personal care products, baby care essentials, and items marked as "Non-Returnable" cannot be returned unless they are damaged or defective on arrival.' },
     ]
   },
@@ -33,8 +33,8 @@ export const FAQS = [
   {
     category: 'Account & Payments',
     items: [
-      { q: 'What payment methods do you accept?', a: 'We accept all UPI payments (GPay, PhonePe, Paytm), Credit/Debit Cards, Net Banking, and simplified Pay Later options at checkout.' },
-      { q: 'Is cash on delivery (COD) available?', a: 'Yes, Cash on Delivery (COD) is available in select locations for orders up to ₹2,000.' },
+      { q: 'What payment methods do you accept?', a: 'We operate exclusively on a Cash on Delivery (COD) basis. Payment can be made in cash directly to our delivery executive when your order is delivered.' },
+      { q: 'Is cash on delivery (COD) available?', a: 'Yes! Cash on Delivery (COD) is our primary and only payment method. All orders are processed with payment collected in cash upon delivery.' },
       { q: 'How do I use a discount or coupon code?', a: 'You can apply coupon codes (like WELCOME10) directly during checkout under the "Coupons" section in your cart for instant savings.' },
       { q: 'Can I use multiple discount codes?', a: 'Only one discount code can be applied per order. If you have multiple codes, use the one that offers the highest savings for your current order.' },
     ]

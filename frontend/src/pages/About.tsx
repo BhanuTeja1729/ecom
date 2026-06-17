@@ -16,6 +16,7 @@ const COMPANY_DETAILS = [
   { icon: FileText, label: 'GSTIN', value: '01AAOCB6938R1ZZ' },
   { icon: Calendar, label: 'Date of Incorporation', value: 'April 27, 2026' },
   { icon: MapPin, label: 'Registered Office', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K, India – 180005' },
+  { icon: MapPin, label: 'Inventory / Store Location', value: 'Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603' },
 ];
 
 export function About() {
@@ -52,7 +53,7 @@ export function About() {
                 We specialize in providing and delivering a wide variety of daily essentials, including fresh fruits & vegetables, dairy products, bakery items, cooking staples (atta, rice, dal), spices, oils, cold beverages, quick snacks, health products, sweets, and household cleaning essentials. Our mission is to combine cutting-edge technology with high-quality inventory to deliver an unparalleled online shopping experience.
               </p>
               <p className="text-gray-600 leading-relaxed mb-6">
-                To guarantee lightning-fast fulfillment and maintain absolute freshness, our delivery zone is focused within a <strong>12 km radius</strong> of our main inventory hub in <strong>Jammu, India</strong>.
+                To guarantee lightning-fast fulfillment and maintain absolute freshness, our delivery zone is focused within a <strong>12 km radius</strong> of our main inventory hub in <strong>Zirakpur, Punjab, India</strong>.
               </p>
               <button onClick={() => navigate('/shop')} className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors group">
                 Shop Now <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

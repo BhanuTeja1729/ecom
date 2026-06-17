@@ -16,12 +16,32 @@ const customIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-const OFFICE_LOCATION: [number, number] = [32.7304691, 74.8194695];
+const LOCATIONS = {
+  inventory: {
+    name: 'Store / Inventory',
+    coords: [30.6667687, 76.8140209] as [number, number],
+    address: 'Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603',
+    city: 'Zirakpur, Punjab',
+    details: 'Fulfillment Center',
+    zoom: 17,
+    gmapsUrl: 'https://www.google.com/maps/place/Ramada+Plaza+by+Wyndham+Chandigarh+Zirakpur/@30.6667687,76.8115209,17z/data=!4m15!1m5!3m4!2zMzDCsDQwJzAwLjQiTiA3NsKwNDgnNDEuNSJF!8m2!3d30.6667778!4d76.8115278!3m8!1s0x390fc0be76905e37:0x25fdaf669dce758d!5m2!4m1!1i2!8m2!3d30.6667687!4d76.8140958!16s%2Fg%2F11b7q6mdhq?entry=ttu&g_ep=EgoyMDI2MDYxMy4wIKXMDSoASAFQAw%3D%3D'
+  },
+  office: {
+    name: 'Registered Office',
+    coords: [32.7304691, 74.8194695] as [number, number],
+    address: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005',
+    city: 'Jammu, J&K',
+    details: 'Headquarters',
+    zoom: 15,
+    gmapsUrl: 'https://www.google.com/maps?q=32.7304691,74.8194695'
+  }
+};
 
 const CONTACT_INFO = [
   { icon: Mail, title: 'Email', value: '2804blipzoinnovationptv@gmail.com', sub: 'We reply within 24 hours' },
   { icon: Phone, title: 'Phone', value: '+91 7006464761, +91 8899590378', sub: 'Mon-Sat, 10am-6pm IST' },
   { icon: MapPin, title: 'Registered Address', value: 'M/S Aligarh Traders, Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005', sub: 'Headquarters' },
+  { icon: MapPin, title: 'Store / Inventory Address', value: 'Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603', sub: 'Fulfillment Center' },
 ];
 
 export function Contact() {
@@ -29,6 +49,7 @@ export function Contact() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [activeLoc, setActiveLoc] = useState<'inventory' | 'office'>('inventory');
 
   useEffect(() => {
     const timer = setTimeout(() => setMapReady(true), 100);
@@ -62,10 +83,10 @@ export function Contact() {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-10">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
-          {/* Contact info + Map */}
+          {/* Contact info */}
           <div className="space-y-5">
             {CONTACT_INFO.map(({ icon: Icon, title, value, sub }) => (
               <div key={title} className="bg-white rounded-2xl border border-gray-200 p-5 flex gap-4">
@@ -79,51 +100,6 @@ export function Contact() {
                 </div>
               </div>
             ))}
-
-            {/* Map */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-5">
-              <p className="font-bold text-gray-900 text-sm mb-3">📍 Our Location</p>
-              <div className="rounded-xl overflow-hidden h-64 relative" style={{ zIndex: 0 }}>
-                {mapReady && (
-                  <MapContainer
-                    center={OFFICE_LOCATION}
-                    zoom={15}
-                    scrollWheelZoom={false}
-                    style={{ height: '100%', width: '100%', borderRadius: '0.75rem' }}
-                    attributionControl={true}
-                  >
-                    <TileLayer
-                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <Marker position={OFFICE_LOCATION} icon={customIcon}>
-                      <Popup>
-                        <div style={{ textAlign: 'center', minWidth: 180 }}>
-                          <strong style={{ fontSize: 14, color: '#111' }}>BLIPZO Innovations</strong>
-                          <br />
-                          <span style={{ fontSize: 12, color: '#666' }}>
-                            Shop No. 11, Dogra Hall<br />
-                            Rehari Mohalla, Jammu<br />
-                            J&K, India – 180005
-                          </span>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  </MapContainer>
-                )}
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <p className="text-xs text-gray-400">Jammu, Jammu & Kashmir, India</p>
-                <a
-                  href={`https://www.google.com/maps?q=${OFFICE_LOCATION[0]},${OFFICE_LOCATION[1]}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors"
-                >
-                  Open in Google Maps →
-                </a>
-              </div>
-            </div>
           </div>
 
           {/* Contact form */}
@@ -184,6 +160,77 @@ export function Contact() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Map - Full Width */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <p className="font-bold text-gray-900 text-base mb-4">📍 Our Locations</p>
+
+          {/* Location tabs */}
+          <div className="flex gap-2 mb-4 p-1 bg-gray-50 rounded-xl border border-gray-100 max-w-sm">
+            <button
+              type="button"
+              onClick={() => setActiveLoc('inventory')}
+              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${activeLoc === 'inventory'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-950 hover:bg-gray-100'
+                }`}
+            >
+              Store / Inventory
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveLoc('office')}
+              className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${activeLoc === 'office'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-950 hover:bg-gray-100'
+                }`}
+            >
+              Registered Office
+            </button>
+          </div>
+
+          <div className="rounded-xl overflow-hidden h-[380px] relative" style={{ zIndex: 0 }}>
+            {mapReady && (
+              <MapContainer
+                key={activeLoc}
+                center={LOCATIONS[activeLoc].coords}
+                zoom={LOCATIONS[activeLoc].zoom}
+                scrollWheelZoom={false}
+                style={{ height: '100%', width: '100%', borderRadius: '0.75rem' }}
+                attributionControl={true}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker position={LOCATIONS[activeLoc].coords} icon={customIcon}>
+                  <Popup>
+                    <div style={{ textAlign: 'center', minWidth: 180 }}>
+                      <strong style={{ fontSize: 14, color: '#111' }}>
+                        {activeLoc === 'office' ? 'BLIPZO Registered Office' : 'BLIPZO Fulfillment Center'}
+                      </strong>
+                      <br />
+                      <span style={{ fontSize: 12, color: '#666' }}>
+                        {LOCATIONS[activeLoc].address}
+                      </span>
+                    </div>
+                  </Popup>
+                </Marker>
+              </MapContainer>
+            )}
+          </div>
+          <div className="flex items-center justify-between mt-4">
+            <p className="text-sm text-gray-500 font-medium">{LOCATIONS[activeLoc].address}</p>
+            <a
+              href={LOCATIONS[activeLoc].gmapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-amber-600 font-bold hover:text-amber-700 transition-colors"
+            >
+              Open in Google Maps →
+            </a>
           </div>
         </div>
       </div>
