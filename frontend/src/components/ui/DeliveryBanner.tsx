@@ -38,10 +38,10 @@ export function TrendingMarquee({ compact }: { compact?: boolean }) {
           letter-spacing: 0.025em;
         }
       `}</style>
-      
+
       <div className="ticker-wrap">
         <div className="ticker-move">
-          <span className="ticker-item text-gray-700">⚡ Notice: Delivery services are currently available exclusively within Zirakpur, Punjab</span>
+          <span className="ticker-item text-gray-700"> 🚨 Now Delivering Exclusively in Zirakpur, Punjab! &gt; We currently serve areas within a 12 km radius of our store. Cash on Delivery (COD) only.⚡</span>
         </div>
       </div>
     </div>

@@ -17,8 +17,8 @@ export const FAQS = [
   {
     category: 'Returns & Refunds',
     items: [
-      { q: 'What is your return policy?', a: 'Post gateway and online payment integration, we offer instant replacements or returns on perishables and fresh items (groceries, fruits, vegetables, dairy) within 24 hours if the quality is not up to the mark. For packaged non-perishable goods, returns are accepted within 7 days in original condition.' },
-      { q: 'How long do refunds take?', a: 'Since we currently support only Cash on Delivery (COD), no online transactions occur, so refunds are not needed for cancellations. For product returns or price adjustments, we will handle replacements directly or adjust the balance in cash through our delivery partner.' },
+      { q: 'What is your return policy?', a: 'We want you to love your purchase! If you are not satisfied with the quality of your items, you can request a return or replacement within these timeframes:\n\nPerishables & Fresh Items (Groceries, fruits, vegetables, dairy): Request an instant replacement or return within 24 hours of delivery if the quality is not up to standard.\n\nPackaged Non-Perishable Goods: Returns are accepted within 7 days of delivery, provided the items are in their original, unopened condition.' },
+      { q: 'How long do refunds take?', a: 'Because we operate strictly on a Cash on Delivery (COD) basis, no online transactions occur. Therefore, standard banking refunds are not required.\n\nFor cancellations: Since no upfront payment is made, cancellations require no refund process.\n\nFor returns or price adjustments: Our delivery partner will handle product replacements directly or adjust the balance with you in cash on the spot.' },
       { q: 'What items cannot be returned?', a: 'For hygiene and safety reasons, once opened, personal care products, baby care essentials, and items marked as "Non-Returnable" cannot be returned unless they are damaged or defective on arrival.' },
     ]
   },
@@ -109,7 +109,7 @@ export function FAQ() {
                         {isOpen && (
                           <div className="px-6 pb-5">
                             <div className="border-t border-gray-100 pt-4">
-                              <p className="text-sm text-gray-600 leading-relaxed">{item.a}</p>
+                              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{item.a}</p>
                             </div>
                           </div>
                         )}

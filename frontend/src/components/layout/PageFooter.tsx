@@ -13,18 +13,18 @@ const USEFUL_LINKS = [
 ];
 
 const FOOTER_CATEGORIES = [
-  'Atta, Rice & Dal',
-  'Bakery Biscuits',
-  'Cleaning Essentials',
-  'Cold Drinks & Juices',
-  'Dairy, Bread & Eggs',
-  'Fruits & Vegetables',
-  'Masala, Oil & More',
-  'Pharma & Wellness',
-  'Sauces & Spreads',
-  'Snacks & Munchies',
-  'Sweet Tooth',
-  'Tea, Coffee & Health Drink',
+  { label: 'Atta, Rice & Dal', slug: 'atta-rice-dal' },
+  { label: 'Bakery & Biscuits', slug: 'bakery-biscuits' },
+  { label: 'Cleaning Essentials', slug: 'cleaning-essentials' },
+  { label: 'Cold Drinks & Juices', slug: 'cold-drinks-juices' },
+  { label: 'Dairy, Bread & Eggs', slug: 'dairy-bread-eggs' },
+  { label: 'Fruits & Vegetables', slug: 'fruits-vegetables' },
+  { label: 'Masala, Oil & More', slug: 'masala-oil-more' },
+  { label: 'Pharma & Wellness', slug: 'pharma-wellness' },
+  { label: 'Sauces & Spreads', slug: 'sauces-spreads' },
+  { label: 'Snacks & Munchies', slug: 'snacks-munchies' },
+  { label: 'Sweet Tooth', slug: 'sweet-tooth' },
+  { label: 'Tea, Coffee & Health Drink', slug: 'tea-coffee-health-drink' },
 ];
 
 export function PageFooter() {
@@ -87,11 +87,11 @@ export function PageFooter() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {FOOTER_CATEGORIES.map(cat => (
                 <button
-                  key={cat}
-                  onClick={() => navigate('/')}
+                  key={cat.slug}
+                  onClick={() => navigate(`/category/${cat.slug}`)}
                   className="text-sm text-gray-500 hover:text-amber-600 transition-colors text-left"
                 >
-                  {cat}
+                  {cat.label}
                 </button>
               ))}
             </div>
