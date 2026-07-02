@@ -1,5 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+
 // CartContext uses 'any' for product/variant to support both MongoDB and legacy shapes
+interface CartItemLocal {
+  id: string;
+  product: any;
+  variant?: any;
+  quantity: number;
+}
+
+type Coupon = any;
 
 interface CartContextValue {
   items: any[];
@@ -107,7 +116,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return sum + base * i.quantity;
   }, 0);
 
-  const discount = coupon
+  const minOrderAmt = coupon ? (coupon.minimumOrderAmount ?? coupon.minimum_order_amount ?? 0) : 0;
+  const discount = coupon && subtotal >= minOrderAmt
     ? (coupon.discountType || coupon.discount_type) === 'percentage'
       ? Math.min(subtotal * ((coupon.discountValue ?? coupon.discount_value) / 100), coupon.maximumDiscountAmount ?? coupon.maximum_discount_amount ?? Infinity)
       : (coupon.discountValue ?? coupon.discount_value ?? 0)

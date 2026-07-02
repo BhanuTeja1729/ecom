@@ -1,4 +1,5 @@
 import './config/env';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -18,16 +19,37 @@ import cartRoutes from './routes/cart.routes';
 import orderRoutes from './routes/order.routes';
 import reviewRoutes from './routes/review.routes';
 import userRoutes from './routes/user.routes';
+import paymentRoutes from './routes/payment.routes';
+import mediaRoutes from './routes/media.routes';
+import couponRoutes from './routes/coupon.routes';
+import routeRoutes from './routes/route.routes';
+import deliveryRoutes from './routes/delivery.routes';
+import contactRoutes from './routes/contact.routes';
+
+
 
 const app = express();
 
 // ─── Security Middleware ────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
 }));
 
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  'https://blipzo-rp5n.onrender.com',
+].filter(Boolean);
+
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (same-origin, mobile apps, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -41,7 +63,7 @@ const limiter = rateLimit({
 });
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 50,
   message: { success: false, message: 'Too many auth attempts, please try again in 15 minutes.' },
 });
 
@@ -73,8 +95,24 @@ app.use(`${BASE}/categories`, categoryRoutes);
 app.use(`${BASE}/cart`, cartRoutes);
 app.use(`${BASE}/orders`, orderRoutes);
 app.use(`${BASE}/users`, userRoutes);
+app.use(`${BASE}/payment`, paymentRoutes);
+app.use(`${BASE}/delivery`, deliveryRoutes);
+app.use(`${BASE}/media`, mediaRoutes);
+app.use(`${BASE}/coupons`, couponRoutes);
+app.use(`${BASE}/routes`, routeRoutes);
+app.use(`${BASE}/contact`, contactRoutes);
 
-// ─── 404 & Error Handler ────────────────────────────────────────────────────
+
+// ─── Serve Frontend (production) ────────────────────────────────────────────
+const frontendDist = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDist));
+
+// SPA fallback — serve index.html for any non-API route
+app.get(/^(?!\/api).*/, (_, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
+// ─── 404 & Error Handler (API only) ─────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
@@ -82,6 +120,35 @@ app.use(errorHandler);
 async function start() {
   try {
     await connectDB();
+
+    // Run payout migration on server start/hot-reload
+    try {
+      const { Order } = await import('./models/Order');
+      const { getSettingValue } = await import('./models/Setting');
+      const flatPayout = await getSettingValue('flatDeliveryPayout', 50);
+      console.log(`[Migration] Active flat delivery payout: ₹${flatPayout}`);
+      const orders = await Order.find({});
+      let updatedCount = 0;
+      for (const order of orders) {
+        let changed = false;
+        if (order.deliveryDistanceKm === undefined || order.deliveryDistanceKm === null) {
+          order.deliveryDistanceKm = 5.0;
+          changed = true;
+        }
+        if (order.deliveryPayout === undefined || order.deliveryPayout === null || order.deliveryPayout !== flatPayout) {
+          order.deliveryPayout = flatPayout;
+          changed = true;
+        }
+        if (changed) {
+          await order.save();
+          updatedCount++;
+        }
+      }
+      console.log(`[Migration] Successfully updated ${updatedCount} orders.`);
+    } catch (migErr) {
+      console.error('[Migration] Failed:', migErr);
+    }
+
     const port = parseInt(env.PORT, 10);
     app.listen(port, () => {
       console.log(`🚀 Server running on http://localhost:${port} [${env.NODE_ENV}]`);
@@ -96,3 +163,6 @@ async function start() {
 start();
 
 export default app;
+
+// Trigger rebuild for UPI settings and salary payout options
+

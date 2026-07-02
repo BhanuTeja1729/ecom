@@ -2,15 +2,21 @@ import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IAddress {
+  _id?: string;
+  label?: string;
   fullName?: string;
   email?: string;
   phone?: string;
+  doorNo?: string;
   addressLine1?: string;
   addressLine2?: string;
+  landmark?: string;
   city?: string;
   state?: string;
   postalCode?: string;
   country?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface IUser extends Document {
@@ -19,30 +25,39 @@ export interface IUser extends Document {
   fullName: string;
   avatarUrl?: string;
   phone?: string;
-  role: 'customer' | 'admin';
+  role: 'customer' | 'delivery_partner' | 'admin';
   googleId?: string;
+  auth0Id?: string;
   isVerified: boolean;
   isActive: boolean;
   shippingAddress?: IAddress;
   addresses: IAddress[];
   wishlist: mongoose.Types.ObjectId[];
   refreshTokens: string[];
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
+  upiId?: string;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
 const AddressSchema = new Schema<IAddress>({
+  label: String,
   fullName: String,
   email: String,
   phone: String,
+  doorNo: String,
   addressLine1: String,
   addressLine2: String,
+  landmark: String,
   city: String,
   state: String,
   postalCode: String,
   country: String,
-}, { _id: false });
+  latitude: Number,
+  longitude: Number,
+}, { _id: true });
 
 const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -50,14 +65,18 @@ const UserSchema = new Schema<IUser>({
   fullName: { type: String, required: true, trim: true },
   avatarUrl: String,
   phone: String,
-  role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  role: { type: String, enum: ['customer', 'delivery_partner', 'admin'], default: 'customer' },
   googleId: { type: String, sparse: true },
+  auth0Id: { type: String, sparse: true },
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   shippingAddress: AddressSchema,
   addresses: [AddressSchema],
   wishlist: [{ type: Schema.Types.ObjectId, ref: 'Product' }],
   refreshTokens: [String],
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  upiId: { type: String, trim: true },
 }, { timestamps: true });
 
 UserSchema.pre('save', async function (next) {
@@ -71,7 +90,5 @@ UserSchema.methods.comparePassword = async function (candidatePassword: string):
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-UserSchema.index({ email: 1 });
-UserSchema.index({ googleId: 1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

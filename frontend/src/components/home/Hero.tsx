@@ -25,7 +25,7 @@ export function Hero() {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/20 border border-amber-500/30 rounded-full mb-8">
             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            <span className="text-amber-400 text-sm font-semibold">Trusted by 50,000+ customers</span>
+            <span className="text-amber-400 text-sm font-semibold">Trusted by 600+ customers</span>
           </div>
 
           {/* Headline */}
@@ -61,7 +61,7 @@ export function Hero() {
             {[
               { icon: Shield, label: 'Secure Payments', sub: '256-bit SSL encryption' },
               { icon: Truck, label: 'Free Shipping', sub: 'On orders over $75' },
-              { icon: Star, label: '4.9 Rating', sub: '50k+ reviews' },
+              { icon: Star, label: '4.9 Rating', sub: '600+ reviews' },
             ].map(({ icon: Icon, label, sub }) => (
               <div key={label} className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">

@@ -11,13 +11,15 @@ const RouterContext = createContext<RouterContextValue | null>(null);
 
 const ROUTES = [
   '/admin',
+  '/delivery',
   '/dashboard',
   '/checkout',
+  '/checkout-verify',
   '/cart',
   '/auth',
+  '/reset-password',
   '/order-tracking',
   '/about',
-  '/contact',
   '/faq',
   '/privacy',
   '/terms',
@@ -56,11 +58,24 @@ export function RouterProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const navigate = useCallback((to: string) => {
-    const [path, search] = to.split('?');
+    const [pathAndSearch, hash] = to.split('#');
+    const [path, search] = pathAndSearch.split('?');
     window.history.pushState({}, '', to);
     setLocation(path);
     setQuery(new URLSearchParams(search || ''));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (hash) {
+      // Wait for render then scroll to hash element
+      setTimeout(() => {
+        const el = document.getElementById(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }, []);
 
   let matchedParams: Record<string, string> = {};

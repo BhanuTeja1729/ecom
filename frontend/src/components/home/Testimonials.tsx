@@ -59,14 +59,14 @@ export function Testimonials() {
           <p className="text-amber-600 font-semibold text-sm uppercase tracking-wider mb-2">Social Proof</p>
           <h2 className="text-4xl font-black text-gray-900 tracking-tight mb-4">What Our Customers Say</h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Over 50,000 satisfied customers and counting. Here's what they have to say about their Luxe experience.
+            Over 600+ satisfied customers and counting. Here's what they have to say about their BLIPZO experience.
           </p>
           <div className="flex items-center justify-center gap-2 mt-4">
-            {[1,2,3,4,5].map(s => (
+            {[1, 2, 3, 4, 5].map(s => (
               <Star key={s} className="w-5 h-5 text-amber-400 fill-amber-400" />
             ))}
             <span className="ml-2 font-bold text-gray-900">4.9/5</span>
-            <span className="text-gray-500 text-sm">from 50,000+ reviews</span>
+            <span className="text-gray-500 text-sm">from 1000+ reviews</span>
           </div>
         </div>
 

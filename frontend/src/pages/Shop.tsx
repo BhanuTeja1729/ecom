@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, ChevronLeft, ChevronRight, Plus, X, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, ShoppingCart } from 'lucide-react';
 import { productApi, categoryApi } from '../lib/api';
 import { useCart } from '../contexts/CartContext';
-import { useRouter } from '../lib/router';
+import { useAuth } from '../contexts/AuthContext';
+import { useRouter, Link } from '../lib/router';
+import { DeliveryBanner, TrendingMarquee } from '../components/ui/DeliveryBanner';
+import { PageFooter } from '../components/layout/PageFooter';
 
 /* ─── tiny helper to scroll a ref left / right ─────────────────────────── */
 function scrollRow(ref: React.RefObject<HTMLDivElement | null>, dir: 'left' | 'right') {
@@ -166,77 +169,149 @@ const CAT_COLORS = [
 
 /* ─── main Shop page ─────────────────────────────────────────────────────── */
 export function Shop({ categorySlug }: { categorySlug?: string }) {
-  const { navigate } = useRouter();
   const { addItem } = useCart();
+  const { user } = useAuth();
+  const { navigate } = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]); // top-level only
+  const [allCategories, setAllCategories] = useState<any[]>([]); // all (incl. children)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState(categorySlug ?? '');
   const [addedId, setAddedId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Fetch top-level categories (for the pill strip) AND all categories (for grouping)
     Promise.all([
       categoryApi.list(),
-      productApi.list({ limit: '100', sort: 'createdAt', order: 'desc' }),
-    ])
-      .then(([cats, prods]) => {
-        setCategories(cats.data ?? []);
-        setAllProducts(prods.data ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      categoryApi.list({ all: 'true' }),
+    ]).then(([topRes, allRes]) => {
+      setCategories(topRes.data ?? []);
+      setAllCategories(allRes.data ?? []);
+    }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    setActiveCategory(categorySlug ?? '');
+  }, [categorySlug]);
+
+  // Fetch products from backend whenever active category or search changes
+  useEffect(() => {
+    setLoading(true);
+
+    const queryParams: Record<string, string> = {
+      all: 'true',
+      sort: 'createdAt',
+      order: 'desc',
+    };
+
+    // Pass categorySlug directly — backend now resolves slug → ObjectId
+    if (activeCategory) queryParams.categorySlug = activeCategory;
+
+    productApi.list(queryParams)
+      .then(res => setAllProducts(res.data ?? []))
+      .catch(() => setAllProducts([]))
+      .finally(() => setLoading(false));
+  }, [activeCategory]);
+
   function handleAdd(product: any) {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
     addItem(product, null, 1);
     setAddedId(product._id);
     setTimeout(() => setAddedId(null), 1500);
   }
 
-  /* Filter products by search + activeCategory */
+  // Filtered array applies case-insensitive search locally on the loaded products
   const filtered = allProducts.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !activeCategory || p.category?.slug === activeCategory || p.category === activeCategory;
-    return matchSearch && matchCat;
+    return !search || p.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  /* Group by category */
+  // Grouped by category when there is no search query or active category selected.
+  // Products may belong to a CHILD category; we resolve them up to their top-level parent.
   const grouped: { category: any; products: any[] }[] = [];
   if (!activeCategory && !search) {
+    // Build child→topLevel map: given any category id, find its top-level ancestor
+    const childToTopLevel = new Map<string, string>();
+    allCategories.forEach(cat => {
+      const catId = String(cat._id);
+      if (!cat.parent) {
+        // It is a top-level category itself
+        childToTopLevel.set(catId, catId);
+      } else {
+        const parentId = String(cat.parent?._id ?? cat.parent);
+        // Map child → parent (parent is assumed top-level here)
+        childToTopLevel.set(catId, parentId);
+      }
+    });
+
     categories.forEach(cat => {
-      const prods = allProducts.filter(p => p.category?.slug === cat.slug || p.category?._id === cat._id || p.category === cat._id);
+      const catId = String(cat._id);
+      const prods = allProducts.filter(p => {
+        const pCatId = String(p.category?._id ?? p.category ?? '');
+        // Direct match OR child-of-this-top-level match
+        return pCatId === catId ||
+          p.category?.slug === cat.slug ||
+          childToTopLevel.get(pCatId) === catId;
+      });
       if (prods.length > 0) grouped.push({ category: cat, products: prods });
     });
-    // Uncategorised
-    const uncatProds = allProducts.filter(p => !p.category);
+    const matchedIds = new Set(grouped.flatMap(g => g.products.map((p: any) => p._id)));
+    const uncatProds = allProducts.filter(p => !p.category || !matchedIds.has(p._id));
     if (uncatProds.length > 0) grouped.push({ category: { name: 'Other', slug: '' }, products: uncatProds });
   }
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
-      {/* ── Search bar ── */}
-      <div className="bg-white border-b border-gray-100 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 py-3 max-w-xl">
-            <Search className="w-4 h-4 text-gray-400 shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder='Search "headphones", "jacket"…'
-              className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder-gray-400"
-            />
-            {search && (
-              <button onClick={() => setSearch('')}>
-                <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Delivery announcement & availability banners */}
+        <div className="mb-6 space-y-3">
+          <TrendingMarquee />
+          <DeliveryBanner />
+        </div>
+
+        {/* Advertising Banners (only show on home/default view) */}
+        {!activeCategory && !search && (
+          <div className="mb-8">
+            {/* Main Hero Banner */}
+            <div 
+              onClick={() => setActiveCategory('fruits-vegetables')}
+              className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-green-600 shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer group h-[200px] md:h-[220px]"
+            >
+              {/* Decorative background circle */}
+              <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-white/5 rounded-l-full transform translate-x-1/6 pointer-events-none" />
+              
+              {/* Content Layout */}
+              <div className="absolute inset-0 flex items-center px-6 md:px-12 z-10">
+                <div className="max-w-[60%] md:max-w-[50%] text-left">
+                  <h2 className="text-xl md:text-3xl font-black text-white leading-tight">
+                    Stock up on daily essentials
+                  </h2>
+                  <p className="text-xs md:text-sm text-green-50/90 mt-2 font-medium leading-relaxed">
+                    Get farm-fresh goodness & a range of exotic fruits, vegetables, eggs & more
+                  </p>
+                  <button className="mt-4 bg-white hover:bg-green-50 active:scale-95 text-green-900 px-5 py-2 rounded-full font-extrabold text-xs md:text-sm transition-all shadow-md">
+                    Shop Now
+                  </button>
+                </div>
+              </div>
+
+              {/* Product collage image on the right */}
+              <div className="absolute right-4 md:right-8 bottom-0 top-0 w-[38%] md:w-[42%] flex items-center justify-center pointer-events-none select-none">
+                <img 
+                  src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=600&q=80" 
+                  alt="Daily Essentials Collage" 
+                  className="h-[90%] w-full object-contain transform group-hover:scale-105 transition-transform duration-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Category icon strip ── */}
         {!loading && categories.length > 0 && (
           <div className="mb-8 -mx-4 px-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
@@ -363,6 +438,9 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
         <span>Added to cart!</span>
       </div>
     )}
+
+      {/* ── Page Footer ── */}
+      <PageFooter />
     </div>
   );
 }

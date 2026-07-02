@@ -1,11 +1,35 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Plus, Trash2, Upload, Loader, GripVertical } from 'lucide-react';
+import { categoryApi, mediaApi } from '../../lib/api';
+
+/**
+ * Extract Cloudinary publicId from a Cloudinary secure_url.
+ * URL format: https://res.cloudinary.com/<cloud>/image/upload/[transformations/]v<version>/<folder>/<file>.<ext>
+ * publicId = everything after /upload/ (and optional version), without the file extension.
+ */
+function extractCloudinaryPublicId(url: string): string | null {
+  if (!url || !url.includes('cloudinary.com')) return null;
+  try {
+    const uploadIdx = url.indexOf('/upload/');
+    if (uploadIdx === -1) return null;
+    let path = url.slice(uploadIdx + '/upload/'.length);
+    // Strip version prefix like v1234567890/
+    path = path.replace(/^v\d+\//, '');
+    // Strip file extension
+    path = path.replace(/\.[^/.]+$/, '');
+    // Decode URL-encoded characters (e.g. %20 → space) to match Cloudinary's stored publicId
+    return decodeURIComponent(path) || null;
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   product: any | null;   // null = create mode
   categories: any[];
   onSave: (data: any) => Promise<void>;
   onClose: () => void;
+  onAddCategory?: (category: any) => void;
 }
 
 const EMPTY = {
@@ -13,12 +37,66 @@ const EMPTY = {
   price: '', comparePrice: '', inventory: '0', lowStockThreshold: '5',
   category: '', tags: '', isFeatured: false, isActive: true,
   images: [{ url: '', altText: '', isPrimary: true, sortOrder: 0 }],
+  variants: [],
 };
 
-export function ProductModal({ product, categories, onSave, onClose }: Props) {
+export function ProductModal({ product, categories, onSave, onClose, onAddCategory }: Props) {
   const [form, setForm] = useState<any>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragIndexRef = useRef<number | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!form.name.trim()) {
+      alert('Please enter a product name before uploading images.');
+      return;
+    }
+    if (!form.category) {
+      alert('Please select a category before uploading images.');
+      return;
+    }
+
+    const selectedCat = categories.find((c: any) => c._id === form.category);
+    if (!selectedCat) {
+      alert('Selected category not found.');
+      return;
+    }
+
+    setUploadingIndex(index);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', 'product');
+    // Send categoryId so the backend can resolve the full parent→child folder path
+    formData.append('categoryId', selectedCat._id);
+    formData.append('productName', form.name.trim());
+
+    try {
+      const res = await mediaApi.upload(formData);
+      if (res.success && res.data.url) {
+        setImg(index, 'url', res.data.url);
+        if (res.data.publicId) {
+          setImg(index, 'publicId', res.data.publicId);
+        }
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to upload image.');
+    } finally {
+      setUploadingIndex(null);
+    }
+  };
+
+
+  // Category inline state
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryForm, setNewCategoryForm] = useState({ name: '', description: '', parent: '', sortOrder: 0, isActive: true });
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState('');
 
   useEffect(() => {
     if (product) {
@@ -36,8 +114,27 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
         isFeatured: product.isFeatured ?? false,
         isActive: product.isActive ?? true,
         images: product.images?.length
-          ? product.images.map((i: any) => ({ url: i.url, altText: i.altText ?? '', isPrimary: i.isPrimary, sortOrder: i.sortOrder }))
+          ? product.images.map((i: any) => ({
+              url: i.url,
+              altText: i.altText ?? '',
+              isPrimary: i.isPrimary,
+              sortOrder: i.sortOrder,
+              // Restore publicId from stored field or derive it from the URL
+              publicId: i.publicId ?? extractCloudinaryPublicId(i.url) ?? '',
+            }))
           : [{ url: '', altText: '', isPrimary: true, sortOrder: 0 }],
+        variants: (product.variants || product.product_variants)?.length
+          ? (product.variants || product.product_variants).map((v: any) => ({
+              name: v.name ?? 'Size',
+              type: v.type ?? v.name ?? 'Size',
+              value: v.value ?? '',
+              priceModifier: String((product.price ?? 0) + (v.priceModifier ?? v.price_modifier ?? 0)),
+              comparePriceModifier: String((product.comparePrice ?? product.compare_price ?? 0) + (v.comparePriceModifier ?? v.compare_price_modifier ?? 0)),
+              inventory: String(v.inventory ?? 0),
+              sku: v.sku ?? '',
+              sortOrder: v.sortOrder ?? 0,
+            }))
+          : [],
       });
     } else {
       setForm(EMPTY);
@@ -45,6 +142,39 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
   }, [product]);
 
   const set = (k: string, v: any) => setForm((p: any) => ({ ...p, [k]: v }));
+
+  async function handleCreateCategory(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newCategoryForm.name.trim()) {
+      setCategoryError('Category name is required.');
+      return;
+    }
+    setCategorySaving(true);
+    setCategoryError('');
+    try {
+      const res = await categoryApi.create({
+        name: newCategoryForm.name.trim(),
+        description: newCategoryForm.description.trim() || undefined,
+        parent: newCategoryForm.parent || undefined,
+        sortOrder: Number(newCategoryForm.sortOrder) || 0,
+        isActive: newCategoryForm.isActive,
+      });
+
+      if (res.success && res.data) {
+        if (onAddCategory) {
+          onAddCategory(res.data);
+        }
+        set('category', res.data._id);
+        setShowAddCategory(false);
+      } else {
+        setCategoryError('Failed to create category.');
+      }
+    } catch (err: any) {
+      setCategoryError(err.message || 'Failed to create category.');
+    } finally {
+      setCategorySaving(false);
+    }
+  }
 
   const setImg = (i: number, k: string, v: any) =>
     setForm((p: any) => {
@@ -59,32 +189,128 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
       images: [...p.images, { url: '', altText: '', isPrimary: false, sortOrder: p.images.length }],
     }));
 
-  const removeImg = (i: number) =>
+  const removeImg = async (i: number) => {
+    if (!window.confirm('Delete this image from Cloudinary? This cannot be undone.')) return;
+    const img = form.images[i];
+    // Resolve publicId: prefer stored value, fall back to extracting from URL
+    const publicId = img?.publicId || extractCloudinaryPublicId(img?.url);
+    if (publicId) {
+      try {
+        await mediaApi.remove(publicId);
+      } catch (err: any) {
+        // Warn but still remove from form — the image may already be gone or was seeded
+        console.warn('Cloudinary delete failed for publicId:', publicId, err?.message);
+        setError(`Warning: Could not delete image from Cloudinary (${err?.message || 'unknown error'}). It may need to be removed manually.`);
+      }
+    }
     setForm((p: any) => ({ ...p, images: p.images.filter((_: any, idx: number) => idx !== i) }));
+  };
+
+
+  // ── Drag-and-drop reorder ──────────────────────────────────────────────────
+  const handleDragStart = (i: number) => {
+    dragIndexRef.current = i;
+    setDraggingIndex(i);
+  };
+
+  const handleDragEnter = (i: number) => {
+    setDragOverIndex(i);
+  };
+
+  const handleDragEnd = () => {
+    const from = dragIndexRef.current;
+    const to = dragOverIndex;
+    if (from !== null && to !== null && from !== to) {
+      setForm((p: any) => {
+        const imgs = [...p.images];
+        const [moved] = imgs.splice(from, 1);
+        imgs.splice(to, 0, moved);
+        // Re-assign sortOrder based on new positions
+        return { ...p, images: imgs.map((img: any, idx: number) => ({ ...img, sortOrder: idx })) };
+      });
+    }
+    dragIndexRef.current = null;
+    setDraggingIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const addVariant = () =>
+    setForm((p: any) => ({
+      ...p,
+      variants: [...(p.variants || []), { name: 'Size', type: 'Size', value: '', priceModifier: '0', comparePriceModifier: '0', inventory: '0', sku: '', sortOrder: p.variants?.length ?? 0 }],
+    }));
+
+  const removeVariant = (i: number) =>
+    setForm((p: any) => ({ ...p, variants: p.variants.filter((_: any, idx: number) => idx !== i) }));
+
+  const updateVariant = (i: number, k: string, v: any) =>
+    setForm((p: any) => {
+      const varts = [...(p.variants || [])];
+      varts[i] = { ...varts[i], [k]: v };
+      if (k === 'name') {
+        varts[i].type = v;
+      }
+      return { ...p, variants: varts };
+    });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    if (!form.name.trim() || !form.description.trim() || !form.price) {
-      setError('Name, description and price are required.');
+    const hasVariants = (form.variants || []).length > 0;
+    if (!form.name.trim() || !form.description.trim()) {
+      setError('Name and description are required.');
+      return;
+    }
+    if (!hasVariants && !form.price) {
+      setError('Price is required.');
       return;
     }
     setSaving(true);
     try {
+      let finalPrice = parseFloat(form.price) || 0;
+      let finalComparePrice = form.comparePrice ? parseFloat(form.comparePrice) : undefined;
+      let finalInventory = parseInt(form.inventory) || 0;
+      let cleanedVariants = [];
+
+      if (hasVariants) {
+        // First variant's absolute price becomes the base product price
+        const basePrice = parseFloat(form.variants[0].priceModifier) || 0;
+        const baseComparePrice = parseFloat(form.variants[0].comparePriceModifier) || 0;
+        finalPrice = basePrice;
+        finalComparePrice = baseComparePrice > 0 ? baseComparePrice : undefined;
+        finalInventory = form.variants.reduce((acc: number, v: any) => acc + (parseInt(v.inventory) || 0), 0);
+
+        cleanedVariants = form.variants.map((v: any, idx: number) => {
+          const varPrice = parseFloat(v.priceModifier) || 0;
+          const varComparePrice = parseFloat(v.comparePriceModifier) || 0;
+          return {
+            name: v.name.trim() || 'Size',
+            type: v.type.trim() || v.name.trim() || 'Size',
+            value: v.value.trim(),
+            priceModifier: varPrice - basePrice, // store relative difference in database
+            comparePriceModifier: varComparePrice - baseComparePrice, // store relative difference in database
+            inventory: parseInt(v.inventory) || 0,
+            sku: v.sku?.trim() || undefined,
+            sortOrder: parseInt(v.sortOrder) || idx,
+          };
+        });
+      }
+
       await onSave({
         name: form.name.trim(),
         description: form.description.trim(),
         shortDescription: form.shortDescription.trim(),
         sku: form.sku.trim() || undefined,
-        price: parseFloat(form.price),
-        comparePrice: form.comparePrice ? parseFloat(form.comparePrice) : undefined,
-        inventory: parseInt(form.inventory) || 0,
+        price: finalPrice,
+        comparePrice: finalComparePrice,
+        inventory: finalInventory,
         lowStockThreshold: parseInt(form.lowStockThreshold) || 5,
         category: form.category || undefined,
         tags: form.tags.split(',').map((t: string) => t.trim()).filter(Boolean),
         isFeatured: form.isFeatured,
         isActive: form.isActive,
         images: form.images.filter((i: any) => i.url.trim()),
+        variants: cleanedVariants,
       });
     } catch (err: any) {
       setError(err.message || 'Save failed');
@@ -94,6 +320,7 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
 
   const label = 'block text-xs font-semibold text-gray-600 mb-1';
   const input = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent';
+  const hasVariants = (form.variants || []).length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -111,25 +338,96 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
         {/* Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
           {/* Basic */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-3">
               <label className={label}>Product Name *</label>
               <input className={input} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Premium Wireless Headphones" />
             </div>
-            <div>
-              <label className={label}>Price (₹) *</label>
-              <input type="number" min={0} className={input} value={form.price} onChange={e => set('price', e.target.value)} placeholder="29999" />
-            </div>
-            <div>
-              <label className={label}>Compare Price (₹)</label>
-              <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => set('comparePrice', e.target.value)} placeholder="39999" />
-            </div>
+            {!hasVariants ? (
+              <>
+                <div>
+                  <label className={label}>MRP / Main Price (₹) *</label>
+                  <input type="number" min={0} className={input} value={form.comparePrice} onChange={e => {
+                    const mrp = e.target.value;
+                    set('comparePrice', mrp);
+                    // Auto-calculate selling price from MRP and discount if no variants
+                    const disc = parseFloat(form.discountPercent);
+                    const mrpNum = parseFloat(mrp);
+                    if (mrpNum > 0 && disc > 0 && disc < 100) {
+                      set('price', String(Math.round(mrpNum * (1 - disc / 100))));
+                    } else if (mrpNum > 0) {
+                      set('price', mrp); // No discount → selling = MRP
+                    }
+                  }} placeholder="320" />
+                </div>
+                <div>
+                  <label className={label}>Discount %</label>
+                  <div className="relative">
+                    <input type="number" min={0} max={99} step={1} className={input + ' pr-8'} value={form.discountPercent ?? (() => {
+                      // Auto-calculate from existing price/comparePrice
+                      const p = parseFloat(form.price);
+                      const cp = parseFloat(form.comparePrice);
+                      if (cp > 0 && p > 0 && cp > p) return String(Math.round(((cp - p) / cp) * 100));
+                      return '';
+                    })()} onChange={e => {
+                      const disc = e.target.value;
+                      set('discountPercent', disc);
+                      const mrp = parseFloat(form.comparePrice);
+                      if (mrp > 0 && parseFloat(disc) > 0 && parseFloat(disc) < 100) {
+                        set('price', String(Math.round(mrp * (1 - parseFloat(disc) / 100))));
+                      } else if (mrp > 0) {
+                        set('price', String(Math.round(mrp))); // 0% discount → selling = MRP
+                      }
+                    }} placeholder="10" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className={label}>Selling Price (₹)</label>
+                  <input type="number" min={0} className={input + ' bg-gray-50 font-bold text-emerald-700'} value={form.price} onChange={e => {
+                    const sp = e.target.value;
+                    set('price', sp);
+                    // Auto-update discount % from MRP and new selling price
+                    const mrp = parseFloat(form.comparePrice);
+                    const spNum = parseFloat(sp);
+                    if (mrp > 0 && spNum > 0 && mrp > spNum) {
+                      set('discountPercent', String(Math.round(((mrp - spNum) / mrp) * 100)));
+                    } else {
+                      set('discountPercent', '');
+                    }
+                  }} placeholder="289" />
+                  {parseFloat(form.comparePrice) > 0 && parseFloat(form.price) > 0 && parseFloat(form.comparePrice) > parseFloat(form.price) && (
+                    <p className="text-[11px] text-amber-600 font-semibold mt-1">
+                      You save ₹{(parseFloat(form.comparePrice) - parseFloat(form.price)).toLocaleString('en-IN')} ({Math.round(((parseFloat(form.comparePrice) - parseFloat(form.price)) / parseFloat(form.comparePrice)) * 100)}% off)
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-3 bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex items-center justify-between text-xs text-amber-800 animate-in fade-in duration-200">
+                <span className="font-medium">MRP, selling prices and stock are managed individually per product parameter below.</span>
+                <span className="font-semibold px-2 py-0.5 bg-amber-100 rounded-md">{form.variants.length} Parameter(s) Added</span>
+              </div>
+            )}
             <div>
               <label className={label}>SKU</label>
-              <input className={input} value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="ELEC-001" />
+              <input className={input} value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="ABC-123" />
             </div>
             <div>
-              <label className={label}>Category</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className={label + ' mb-0'}>Category</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewCategoryForm({ name: '', description: '', parent: '', sortOrder: 0, isActive: true });
+                    setCategoryError('');
+                    setShowAddCategory(true);
+                  }}
+                  className="text-[11px] text-amber-600 font-bold hover:underline"
+                >
+                  + New Category
+                </button>
+              </div>
               <select className={input} value={form.category} onChange={e => set('category', e.target.value)}>
                 <option value="">— No category —</option>
                 {categories.map((c: any) => (
@@ -137,10 +435,22 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
                 ))}
               </select>
             </div>
-            <div>
-              <label className={label}>Stock</label>
-              <input type="number" min={0} className={input} value={form.inventory} onChange={e => set('inventory', e.target.value)} />
-            </div>
+            {!((form.variants || []).length > 0) ? (
+              <div>
+                <label className={label}>Stock</label>
+                <input type="number" min={0} className={input} value={form.inventory} onChange={e => set('inventory', e.target.value)} />
+              </div>
+            ) : (
+              <div>
+                <label className={label}>Total Stock (Auto)</label>
+                <input
+                  type="text"
+                  disabled
+                  className={input + ' bg-gray-50 text-gray-500 font-bold'}
+                  value={(form.variants || []).reduce((acc: number, v: any) => acc + (parseInt(v.inventory) || 0), 0)}
+                />
+              </div>
+            )}
             <div>
               <label className={label}>Low-Stock Alert At</label>
               <input type="number" min={0} className={input} value={form.lowStockThreshold} onChange={e => set('lowStockThreshold', e.target.value)} />
@@ -161,35 +471,223 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
             <input className={input} value={form.tags} onChange={e => set('tags', e.target.value)} placeholder="wireless, audio, headphones" />
           </div>
 
+          {/* Parameters / Variants */}
+          <div className="border-t border-gray-100 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <label className="block text-sm font-black text-gray-900">Product Parameters / Variants</label>
+                <p className="text-xs text-gray-500 mt-0.5">Add attributes like size (e.g. 50g, 2L, 325ml) or price/stock adjustments.</p>
+              </div>
+              <button
+                type="button"
+                onClick={addVariant}
+                className="text-xs text-amber-600 font-semibold flex items-center gap-1 hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Parameter
+              </button>
+            </div>
+
+            {(form.variants || []).length > 0 ? (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {(form.variants || []).map((v: any, i: number) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center bg-gray-50 p-3 rounded-xl border border-gray-100 relative group animate-in slide-in-from-top-2 duration-150">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Type / Group</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.name}
+                        onChange={e => updateVariant(i, 'name', e.target.value)}
+                        placeholder="e.g. Size"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Value *</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.value}
+                        onChange={e => updateVariant(i, 'value', e.target.value)}
+                        placeholder="e.g. 20g"
+                        required
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">MRP (₹) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.comparePriceModifier}
+                        onChange={e => updateVariant(i, 'comparePriceModifier', e.target.value)}
+                        placeholder="e.g. 100"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Price (₹) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold text-emerald-700"
+                        value={v.priceModifier}
+                        onChange={e => updateVariant(i, 'priceModifier', e.target.value)}
+                        placeholder="e.g. 60"
+                      />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">Stock</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.inventory}
+                        onChange={e => updateVariant(i, 'inventory', e.target.value)}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-gray-500 mb-1">SKU</label>
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        value={v.sku}
+                        onChange={e => updateVariant(i, 'sku', e.target.value)}
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="sm:col-span-1 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(i)}
+                        className="text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors mt-4 shrink-0"
+                        title="Delete parameter"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs text-gray-400">
+                No custom parameters or variants defined yet. Click "Add Parameter" above to set weights, volumes, sizes, etc.
+              </div>
+            )}
+          </div>
+
           {/* Images */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className={label + ' mb-0'}>Image URLs</label>
+              <div>
+                <label className={label + ' mb-0'}>Product Images</label>
+                {form.images.length > 1 && (
+                  <p className="text-[11px] text-gray-400 mt-0.5">Drag ⠿ to reorder</p>
+                )}
+              </div>
               <button type="button" onClick={addImg} className="text-xs text-amber-600 font-semibold flex items-center gap-1 hover:underline">
-                <Plus className="w-3 h-3" /> Add image
+                <Plus className="w-3.5 h-3.5" /> Add Image Slot
               </button>
             </div>
             <div className="space-y-2">
               {form.images.map((img: any, i: number) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input
-                    className={input + ' flex-1'}
-                    value={img.url}
-                    onChange={e => setImg(i, 'url', e.target.value)}
-                    placeholder="https://…"
-                  />
-                  <input
-                    className={input + ' w-32'}
-                    value={img.altText}
-                    onChange={e => setImg(i, 'altText', e.target.value)}
-                    placeholder="Alt text"
-                  />
-                  <label className="flex items-center gap-1 text-xs text-gray-500 shrink-0">
-                    <input type="checkbox" checked={img.isPrimary} onChange={e => setImg(i, 'isPrimary', e.target.checked)} />
-                    Primary
-                  </label>
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragEnter={() => handleDragEnter(i)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e => e.preventDefault()}
+                  className={[
+                    'flex flex-col sm:flex-row gap-3 items-start sm:items-center p-3 rounded-xl border relative group transition-all duration-150',
+                    draggingIndex === i
+                      ? 'opacity-40 scale-[0.98] bg-gray-100 border-dashed border-gray-300'
+                      : dragOverIndex === i
+                      ? 'bg-amber-50 border-amber-400 shadow-md shadow-amber-100'
+                      : 'bg-gray-50 border-gray-100 hover:border-gray-200',
+                  ].join(' ')}
+                >
+                  {/* Drag Handle */}
                   {form.images.length > 1 && (
-                    <button type="button" onClick={() => removeImg(i)} className="text-red-400 hover:text-red-600">
+                    <div
+                      className="hidden sm:flex items-center self-stretch cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors px-0.5 shrink-0"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-5 h-5" />
+                    </div>
+                  )}
+
+                  {/* Thumbnail */}
+                  <div className="w-16 h-16 rounded-lg border border-gray-200 bg-white flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {img.url ? (
+                      <img src={img.url} alt={img.altText || 'Product'} className="w-full h-full object-cover" />
+                    ) : uploadingIndex === i ? (
+                      <Loader className="w-6 h-6 text-amber-500 animate-spin" />
+                    ) : (
+                      <Upload className="w-6 h-6 text-gray-300" />
+                    )}
+                    {/* Position badge */}
+                    <span className="absolute bottom-0 right-0 bg-gray-900/70 text-white text-[10px] font-bold px-1 rounded-tl-md">
+                      #{i + 1}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 w-full space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        className={input + ' flex-1 bg-white cursor-not-allowed text-xs'}
+                        value={img.url}
+                        readOnly
+                        placeholder="Click Upload File to choose an image"
+                      />
+                      <label className={`px-3 py-2 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center gap-1 shrink-0 ${
+                        uploadingIndex === i ? 'bg-amber-500 animate-pulse' : 'bg-gray-900 hover:bg-amber-600'
+                      }`}>
+                        {uploadingIndex === i
+                          ? <><Loader className="w-3 h-3 animate-spin" /> Uploading…</>
+                          : <><Upload className="w-3 h-3" /> Upload File</>
+                        }
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => handleFileChange(e, i)}
+                          disabled={uploadingIndex !== null}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <input
+                        className={input + ' w-full sm:w-48 bg-white py-1.5 px-3 text-xs'}
+                        value={img.altText}
+                        onChange={e => setImg(i, 'altText', e.target.value)}
+                        placeholder="SEO alt text"
+                      />
+                      <label className="flex items-center gap-1.5 text-xs text-gray-600 font-semibold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-amber-500 focus:ring-amber-500 w-3.5 h-3.5"
+                          checked={img.isPrimary}
+                          onChange={e => {
+                            setForm((p: any) => ({
+                              ...p,
+                              images: p.images.map((im: any, idx: number) => ({
+                                ...im,
+                                isPrimary: idx === i ? e.target.checked : false,
+                              }))
+                            }));
+                          }}
+                        />
+                        Primary
+                      </label>
+                    </div>
+                  </div>
+
+                  {form.images.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeImg(i)}
+                      className="absolute top-2 right-2 sm:static text-red-400 hover:text-red-600 p-1.5 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
@@ -230,6 +728,81 @@ export function ProductModal({ product, categories, onSave, onClose }: Props) {
           </button>
         </div>
       </div>
+
+      {showAddCategory && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-100 transform transition-all scale-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-black text-gray-900">Add New Category</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddCategory(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCategory} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Home & Kitchen"
+                  value={newCategoryForm.name}
+                  onChange={e => setNewCategoryForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Brief description of products in this category..."
+                  value={newCategoryForm.description}
+                  onChange={e => setNewCategoryForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Parent Category</label>
+                <select
+                  value={newCategoryForm.parent}
+                  onChange={e => setNewCategoryForm(f => ({ ...f, parent: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                >
+                  <option value="">— No parent (Top-Level) —</option>
+                  {categories.map((c: any) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              {categoryError && (
+                <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {categoryError}
+                </div>
+              )}
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategory(false)}
+                  className="px-4 py-2 border border-gray-200 text-xs font-semibold text-gray-600 rounded-xl hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={categorySaving}
+                  className="px-4 py-2 bg-gray-900 hover:bg-amber-600 text-white text-xs font-bold rounded-xl disabled:opacity-60 flex items-center gap-1.5"
+                >
+                  {categorySaving && <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
