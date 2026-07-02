@@ -1,4 +1,4 @@
-import { Instagram, Twitter, Facebook, Youtube, Mail, Phone, MapPin, Zap } from 'lucide-react';
+import { Instagram, Twitter, Facebook, Youtube, Mail, Phone, MapPin, Zap, FileText } from 'lucide-react';
 import { Link } from '../../lib/router';
 
 const LINKS = {
@@ -12,7 +12,7 @@ const LINKS = {
   Company: [
     { label: 'About Us', href: '/about' },
     { label: 'Privacy Policy', href: '/privacy' },
-    { label: 'Terms of Service', href: '/terms' },
+    { label: 'Terms & Conditions', href: '/terms' },
   ],
 };
 
@@ -42,9 +42,17 @@ export function Footer() {
                 <Phone className="w-4 h-4" />
                 +91 7006464761, +91 8899590378
               </a>
+              <span className="flex items-start gap-2.5 text-sm text-gray-400">
+                <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                <span><strong>Office:</strong> Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005</span>
+              </span>
+              <span className="flex items-start gap-2.5 text-sm text-gray-400">
+                <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                <span><strong>Store:</strong> Ambala - Chandigarh Expy, Village Pabhat, Zirakpur, Punjab 140603</span>
+              </span>
               <span className="flex items-center gap-2.5 text-sm text-gray-400">
-                <MapPin className="w-4 h-4 shrink-0" />
-                Shop No. 11, Dogra Hall, Rehari Mohalla, Jammu, J&K – 180005
+                <FileText className="w-4 h-4 shrink-0" />
+                GSTIN: 01AAOCB6938R1ZZ
               </span>
             </div>
           </div>
@@ -78,7 +86,7 @@ export function Footer() {
           </p>
           <div className="flex items-center gap-4">
             <Link to="/privacy" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>
-            <Link to="/terms" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms</Link>
+            <Link to="/terms" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms & Conditions</Link>
           </div>
         </div>
       </div>

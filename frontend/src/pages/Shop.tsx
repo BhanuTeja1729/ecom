@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, ChevronLeft, ChevronRight, Plus, X, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, ShoppingCart } from 'lucide-react';
 import { productApi, categoryApi } from '../lib/api';
 import { useCart } from '../contexts/CartContext';
-import { useRouter } from '../lib/router';
-import { DeliveryBanner } from '../components/ui/DeliveryBanner';
+import { useAuth } from '../contexts/AuthContext';
+import { useRouter, Link } from '../lib/router';
+import { DeliveryBanner, TrendingMarquee } from '../components/ui/DeliveryBanner';
+import { PageFooter } from '../components/layout/PageFooter';
 
 /* ─── tiny helper to scroll a ref left / right ─────────────────────────── */
 function scrollRow(ref: React.RefObject<HTMLDivElement | null>, dir: 'left' | 'right') {
@@ -168,6 +170,8 @@ const CAT_COLORS = [
 /* ─── main Shop page ─────────────────────────────────────────────────────── */
 export function Shop({ categorySlug }: { categorySlug?: string }) {
   const { addItem } = useCart();
+  const { user } = useAuth();
+  const { navigate } = useRouter();
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]); // top-level only
   const [allCategories, setAllCategories] = useState<any[]>([]); // all (incl. children)
@@ -196,7 +200,7 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
     setLoading(true);
 
     const queryParams: Record<string, string> = {
-      limit: '200',
+      all: 'true',
       sort: 'createdAt',
       order: 'desc',
     };
@@ -211,6 +215,10 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
   }, [activeCategory]);
 
   function handleAdd(product: any) {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
     addItem(product, null, 1);
     setAddedId(product._id);
     setTimeout(() => setAddedId(null), 1500);
@@ -257,32 +265,53 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
-      {/* ── Search bar ── */}
-      <div className="bg-white border-b border-gray-100 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <div className="flex items-center gap-3 bg-gray-100 rounded-2xl px-4 py-3 max-w-xl">
-            <Search className="w-4 h-4 text-gray-400 shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder='Search "headphones", "jacket"…'
-              className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder-gray-400"
-            />
-            {search && (
-              <button onClick={() => setSearch('')}>
-                <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Delivery availability banner */}
-        <div className="mb-6">
+        {/* Delivery announcement & availability banners */}
+        <div className="mb-6 space-y-3">
+          <TrendingMarquee />
           <DeliveryBanner />
         </div>
+
+        {/* Advertising Banners (only show on home/default view) */}
+        {!activeCategory && !search && (
+          <div className="mb-8">
+            {/* Main Hero Banner */}
+            <div 
+              onClick={() => setActiveCategory('fruits-vegetables')}
+              className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-emerald-700 to-green-600 shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer group h-[200px] md:h-[220px]"
+            >
+              {/* Decorative background circle */}
+              <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-white/5 rounded-l-full transform translate-x-1/6 pointer-events-none" />
+              
+              {/* Content Layout */}
+              <div className="absolute inset-0 flex items-center px-6 md:px-12 z-10">
+                <div className="max-w-[60%] md:max-w-[50%] text-left">
+                  <h2 className="text-xl md:text-3xl font-black text-white leading-tight">
+                    Stock up on daily essentials
+                  </h2>
+                  <p className="text-xs md:text-sm text-green-50/90 mt-2 font-medium leading-relaxed">
+                    Get farm-fresh goodness & a range of exotic fruits, vegetables, eggs & more
+                  </p>
+                  <button className="mt-4 bg-white hover:bg-green-50 active:scale-95 text-green-900 px-5 py-2 rounded-full font-extrabold text-xs md:text-sm transition-all shadow-md">
+                    Shop Now
+                  </button>
+                </div>
+              </div>
+
+              {/* Product collage image on the right */}
+              <div className="absolute right-4 md:right-8 bottom-0 top-0 w-[38%] md:w-[42%] flex items-center justify-center pointer-events-none select-none">
+                <img 
+                  src="https://images.unsplash.com/photo-1610348725531-843dff563e2c?auto=format&fit=crop&w=600&q=80" 
+                  alt="Daily Essentials Collage" 
+                  className="h-[90%] w-full object-contain transform group-hover:scale-105 transition-transform duration-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Category icon strip ── */}
         {!loading && categories.length > 0 && (
           <div className="mb-8 -mx-4 px-4 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
@@ -409,6 +438,9 @@ export function Shop({ categorySlug }: { categorySlug?: string }) {
         <span>Added to cart!</span>
       </div>
     )}
+
+      {/* ── Page Footer ── */}
+      <PageFooter />
     </div>
   );
 }

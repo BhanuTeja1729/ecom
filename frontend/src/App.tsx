@@ -22,6 +22,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m
 const OrderTracking = lazy(() => import('./pages/OrderTracking').then(m => ({ default: m.OrderTracking })));
 const Admin = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
 const About = lazy(() => import('./pages/About').then(m => ({ default: m.About })));
+const Contact = lazy(() => import('./pages/Contact').then(m => ({ default: m.Contact })));
 const FAQ = lazy(() => import('./pages/FAQ').then(m => ({ default: m.FAQ })));
 const Legal = lazy(() => import('./pages/Legal').then(m => ({ default: m.Legal })));
 const DeliveryDashboard = lazy(() => import('./pages/DeliveryDashboard').then(m => ({ default: m.DeliveryDashboard })));
@@ -36,7 +37,7 @@ function PageLoader() {
 }
 
 // Routes that skip the shared Header/Footer (have their own layout)
-const NO_LAYOUT_PATHS = ['/auth', '/reset-password', '/', '/about'];
+const NO_LAYOUT_PATHS = ['/auth', '/reset-password', '/landing'];
 
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -88,14 +89,14 @@ function CustomerRoute({ children }: { children: React.ReactNode }) {
 function AppRouter() {
   const { path, params, navigate } = useRouter();
 
-  const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth') && !path.startsWith('/reset-password');
+  const showLayout = !NO_LAYOUT_PATHS.includes(path) && !path.startsWith('/auth') && !path.startsWith('/reset-password') && !path.startsWith('/landing');
 
   function renderPage() {
     // Public routes
-    if (path === '/') return <Landing />;
+    if (path === '/landing') return <Landing />;
     if (path === '/auth') return <Auth />;
     if (path === '/reset-password') return <ResetPassword />;
-    if (path === '/contact') { navigate('/about'); return <PageLoader />; }
+    if (path === '/contact') return <Contact />;
     if (path === '/about') return <About />;
     if (path === '/faq') return <FAQ />;
     if (path === '/privacy') return <Legal page="privacy" />;
@@ -103,10 +104,10 @@ function AppRouter() {
     if (path === '/admin') return <Admin />;
     if (path === '/delivery') return <ProtectedRoute><DeliveryDashboard /></ProtectedRoute>;
 
-    // Customer-only routes — delivery partners are redirected to /delivery
-    if (path === '/shop') return <CustomerRoute><Shop /></CustomerRoute>;
-    if (path.startsWith('/category/') && params.slug) return <CustomerRoute><Shop categorySlug={params.slug} /></CustomerRoute>;
-    if (path.startsWith('/product/') && params.slug) return <CustomerRoute><ProductDetail slug={params.slug} /></CustomerRoute>;
+    // Root and /shop are publicly browsable (add-to-cart handles auth check inside)
+    if (path === '/' || path === '/shop') return <Shop />;
+    if (path.startsWith('/category/') && params.slug) return <Shop categorySlug={params.slug} />;
+    if (path.startsWith('/product/') && params.slug) return <ProductDetail slug={params.slug} />;
     if (path === '/cart') return <CustomerRoute><Cart /></CustomerRoute>;
     if (path === '/checkout') return <CustomerRoute><Checkout /></CustomerRoute>;
     if (path === '/checkout-verify') return <CustomerRoute><CheckoutVerify /></CustomerRoute>;

@@ -9,7 +9,7 @@ export function Legal({ page }: LegalProps) {
     <div className="min-h-screen bg-white pt-20">
       <div className="bg-gray-950 py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-black text-white">{isPrivacy ? 'Privacy Policy' : 'Terms of Service'}</h1>
+          <h1 className="text-4xl font-black text-white">{isPrivacy ? 'Privacy Policy' : 'Terms & Conditions'}</h1>
           <p className="text-gray-400 mt-2">Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
       </div>
@@ -58,7 +58,7 @@ export function Legal({ page }: LegalProps) {
             {[
               {
                 title: '1. Acceptance of Terms',
-                body: 'By accessing or using the BLIPZO website and services, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use our services. We reserve the right to update these terms at any time.',
+                body: 'By accessing or using the BLIPZO website and services, you agree to be bound by these Terms & Conditions. If you do not agree to these terms, please do not use our services. We reserve the right to update these terms at any time.',
               },
               {
                 title: '2. Account Responsibility',

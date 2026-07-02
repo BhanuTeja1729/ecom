@@ -7,11 +7,11 @@ export const FAQS = [
   {
     category: 'Orders & Delivery',
     items: [
-      { q: 'How long does delivery take?', a: 'We deliver within 2-4 hours! Under peak traffic or bad weather, it might take a bit longer, but our riders always prioritize fast and safe deliveries.' },
+      { q: 'How long does delivery take?', a: 'We operate on a scheduled delivery model. During checkout, you can select your preferred delivery date and time slot, and our riders will ensure your order is delivered within that scheduled window.' },
       { q: 'Do you offer free delivery?', a: 'We offer free delivery on all orders over ₹999. For orders under ₹999, a nominal delivery fee of ₹49 applies depending on your location.' },
       { q: 'Can I track my order?', a: 'Yes! You can track your order in real-time. Once your order is placed, you can view the live status of the delivery partner on a map under the Orders tab in your dashboard.' },
-      { q: 'Where do you deliver?', a: 'We currently deliver across Jammu in India. Enter your delivery address on checkout or addresses panel to check availability in your locality.' },
-      { q: 'Can I change or cancel my order?', a: 'Because we pack and dispatch orders immediately to meet the 10-minute window, orders can only be cancelled within 60 seconds of placement. After that, they enter the packing phase and cannot be cancelled.' },
+      { q: 'Where do you deliver?', a: 'We deliver within a 12 km radius of our store location in Zirakpur, Punjab. Enter your delivery address at checkout or in your address panel to verify availability in your exact area.' },
+      { q: 'Can I change or cancel my order?', a: "Right now we don't accept cancellations." },
     ]
   },
   {
@@ -110,7 +110,7 @@ export function FAQ() {
                         {isOpen && (
                           <div className="px-6 pb-5">
                             <div className="border-t border-gray-100 pt-4">
-                              <p className="text-sm text-gray-600 leading-relaxed">{item.a}</p>
+                              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{item.a}</p>
                             </div>
                           </div>
                         )}
