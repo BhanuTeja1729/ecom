@@ -18,7 +18,7 @@ export const FAQS = [
     category: 'Returns & Refunds',
     items: [
       { q: 'What is your return policy?', a: 'If you receive a defective, damaged, or incorrect item, you can request a return from your dashboard under "Order History". Once requested, our delivery partner will visit your location to pick up the item and verify the 6-digit return code shown in your panel. Upon verification, the return is accepted and the refund is initiated.' },
-      { q: 'How long do refunds take?', a: 'Refunds are initiated automatically via Cashfree to your original payment method or UPI as soon as the return package is picked up and verified by our delivery partner. The refund typically reflects in your account within 2-3 business days.' },
+      { q: 'How long do refunds take?', a: 'Refunds are initiated automatically via Cashfree Payments to your original payment method or UPI as soon as the return package is picked up and verified by our delivery partner. The refund typically reflects in your account within 2-3 business days.' },
       { q: 'What items cannot be returned?', a: 'For hygiene and safety reasons, once opened, personal care products, baby care essentials, and items marked as "Non-Returnable" cannot be returned unless they are damaged or defective on arrival.' },
     ]
   },
@@ -33,7 +33,7 @@ export const FAQS = [
   {
     category: 'Account & Payments',
     items: [
-      { q: 'What payment methods do you accept?', a: 'We accept online payments processed securely via Cashfree, which supports all major UPI apps (GPay, PhonePe, Paytm), Credit/Debit Cards, Net Banking, and popular Wallets. We also support Cash on Delivery (COD).' },
+      { q: 'What payment methods do you accept?', a: 'We accept online payments processed securely via Cashfree Payments, which supports all major UPI apps (GPay, PhonePe, Paytm), Credit/Debit Cards, Net Banking, and popular Wallets. We also support Cash on Delivery (COD).' },
       { q: 'Is my payment transaction secure?', a: 'Yes, absolutely. All online transactions are processed through Cashfree Payments, which is PCI-DSS compliant. Your sensitive card and banking details are encrypted and never stored on our servers.' },
       { q: 'Is cash on delivery (COD) available?', a: 'Yes, Cash on Delivery (COD) is available in select locations for orders up to ₹2,000. You can pay our delivery partner in cash when your order arrives.' },
       { q: 'How do I use a discount or coupon code?', a: 'You can apply coupon codes (like WELCOME10) directly during checkout under the "Coupons" section in your cart for instant savings.' },
