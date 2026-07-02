@@ -116,8 +116,35 @@ export const productApi = {
     api.delete<{ success: boolean }>(`/products/${productId}`),
   updateInventory: (productId: string, inventory: number, lowStockThreshold?: number) =>
     api.patch<{ success: boolean; data: any }>(`/products/${productId}/inventory`, { inventory, lowStockThreshold }),
-  bulkUpdateInventory: (updates: { sku: string; inventory: number; lowStockThreshold?: number }[]) =>
+  bulkUpdateInventory: (updates: { sku: string; inventory: number; lowStockThreshold?: number; price?: number; comparePrice?: number }[]) =>
     api.post<{ success: boolean; results: { sku: string; success: boolean; error?: string }[] }>('/products/bulk-inventory', updates),
+  bulkUpdatePrices: async (file: File) => {
+    const token = getAccessToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${API_BASE}/products/bulk-prices`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Price update failed' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
+
+    return res.json() as Promise<{
+      success: boolean;
+      message: string;
+      summary: { success: number; failed: number };
+      results: any[];
+    }>;
+  },
 };
 
 // ─── Categories ──────────────────────────────────────────────────────────────
@@ -187,7 +214,7 @@ export const adminApi = {
   deleteDeliveryPartner: (id: string) =>
     api.delete<{ success: boolean }>(`/users/admin/delivery-partners/${id}`),
   paySalary: (id: string) =>
-    api.post<{ success: boolean; message: string; modifiedCount: number }>(`/users/admin/delivery-partners/${id}/pay`),
+    api.post<{ success: boolean; message: string; paymentSessionId?: string; orderId?: string; totalSalary?: number }>(`/users/admin/delivery-partners/${id}/pay`),
   listCoupons: () => api.get<{ success: boolean; data: any[] }>('/coupons'),
   createCoupon: (body: any) => api.post<{ success: boolean; data: any }>('/coupons', body),
   deleteCoupon: (id: string) => api.delete<{ success: boolean }>(`/coupons/${id}`),
@@ -196,6 +223,11 @@ export const adminApi = {
   recordRemittance: (id: string) =>
     api.post<{ success: boolean; message: string; remittedCount: number; totalCash: number }>(
       `/users/admin/delivery-partners/${id}/remit`
+    ),
+  verifyPayout: (orderId: string, partnerId: string) =>
+    api.post<{ success: boolean; message?: string }>(
+      '/users/admin/delivery-partners/verify-payout',
+      { orderId, partnerId }
     ),
 };
 

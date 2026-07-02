@@ -449,6 +449,29 @@ export function Admin() {
     setCategoryForm(f => ({ ...f, imageUrl: '' }));
   };
 
+  const [importingPrices, setImportingPrices] = useState(false);
+
+  const handlePriceImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportingPrices(true);
+    try {
+      const res = await productApi.bulkUpdatePrices(file);
+      if (res.success) {
+        toast(res.message || 'Product prices and MRPs updated successfully!', 'success');
+        await loadData();
+      } else {
+        toast('Failed to update product prices.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Failed to import product prices.', 'error');
+    } finally {
+      setImportingPrices(false);
+      e.target.value = '';
+    }
+  };
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -2415,10 +2438,10 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
     }
     
     const data = [
-      ['SKU', 'Stock', 'Threshold'],
-      ['FRU-001', 150, 10],
-      ['DAI-001', 80, 5],
-      ['ATT-001', 200, 15]
+      ['SKU', 'Stock', 'Threshold', 'Price', 'MRP'],
+      ['FRU-001', 150, 10, 99.00, 120.00],
+      ['DAI-001', 80, 5, 45.00, 50.00],
+      ['ATT-001', 200, 15, 150.00, 199.00]
     ];
     
     const worksheet = XLSX.utils.aoa_to_sheet(data);
@@ -2453,6 +2476,8 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
         const skuIdx = headers.findIndex(h => h.includes('sku'));
         const stockIdx = headers.findIndex(h => h.includes('stock') || h.includes('inventory') || h === 'qty' || h.includes('quantity'));
         const thresholdIdx = headers.findIndex(h => h.includes('threshold') || h.includes('alert') || h.includes('limit'));
+        const priceIdx = headers.findIndex(h => h.includes('price') && !h.includes('compare') && !h.includes('mrp'));
+        const mrpIdx = headers.findIndex(h => h.includes('mrp') || h.includes('compareprice') || h.includes('compare price') || h.includes('compare_price') || h.includes('original price'));
 
         if (skuIdx === -1) {
           setError('Could not find a column containing "SKU" in the header row.');
@@ -2486,6 +2511,26 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
             }
           }
 
+          if (priceIdx !== -1) {
+            const rawPrice = row[priceIdx];
+            if (rawPrice !== undefined && rawPrice !== null && String(rawPrice).trim() !== '') {
+              const priceVal = parseFloat(String(rawPrice));
+              if (!isNaN(priceVal)) {
+                item.price = priceVal;
+              }
+            }
+          }
+
+          if (mrpIdx !== -1) {
+            const rawMrp = row[mrpIdx];
+            if (rawMrp !== undefined && rawMrp !== null && String(rawMrp).trim() !== '') {
+              const mrpVal = parseFloat(String(rawMrp));
+              if (!isNaN(mrpVal)) {
+                item.comparePrice = mrpVal;
+              }
+            }
+          }
+
           // Validation
           const skuRegex = /^[A-Z]{3}-\d{3}$/;
           if (!sku) {
@@ -2497,6 +2542,12 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
           } else if (isNaN(inventory) || inventory < 0) {
             item.status = 'invalid';
             item.error = 'Stock must be a non-negative integer';
+          } else if (item.price !== undefined && (isNaN(item.price) || item.price < 0)) {
+            item.status = 'invalid';
+            item.error = 'Price must be a non-negative number';
+          } else if (item.comparePrice !== undefined && (isNaN(item.comparePrice) || item.comparePrice < 0)) {
+            item.status = 'invalid';
+            item.error = 'MRP must be a non-negative number';
           } else {
             item.status = 'valid';
           }
@@ -2553,7 +2604,9 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
       const res = await productApi.bulkUpdateInventory(validUpdates.map(u => ({
         sku: u.sku,
         inventory: u.inventory,
-        lowStockThreshold: u.lowStockThreshold
+        lowStockThreshold: u.lowStockThreshold,
+        price: u.price,
+        comparePrice: u.comparePrice,
       })));
 
       if (res.success) {
@@ -2666,6 +2719,8 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
                       <th className="px-4 py-2.5">SKU</th>
                       <th className="px-4 py-2.5">New Stock</th>
                       <th className="px-4 py-2.5">Threshold</th>
+                      <th className="px-4 py-2.5">Price</th>
+                      <th className="px-4 py-2.5">MRP</th>
                       <th className="px-4 py-2.5">Status</th>
                     </tr>
                   </thead>
@@ -2675,6 +2730,8 @@ export function ImportInventoryModal({ onClose, onSuccess }: ImportInventoryModa
                         <td className="px-4 py-2 font-mono font-bold text-gray-950">{row.sku || '—'}</td>
                         <td className="px-4 py-2 font-bold text-gray-700">{row.inventory}</td>
                         <td className="px-4 py-2 text-gray-400">{row.lowStockThreshold ?? '—'}</td>
+                        <td className="px-4 py-2 font-bold text-gray-700">{row.price !== undefined ? `₹${row.price}` : '—'}</td>
+                        <td className="px-4 py-2 text-gray-400">{row.comparePrice !== undefined ? `₹${row.comparePrice}` : '—'}</td>
                         <td className="px-4 py-2">
                           {row.status === 'valid' && (
                             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded-full text-[10px]">Valid</span>

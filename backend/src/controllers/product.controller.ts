@@ -259,6 +259,8 @@ const bulkInventorySchema = z.array(z.object({
   sku: z.string(),
   inventory: z.number().int().min(0),
   lowStockThreshold: z.number().int().min(0).optional(),
+  price: z.number().min(0).optional(),
+  comparePrice: z.number().min(0).optional(),
 }));
 
 export async function bulkUpdateInventory(req: Request, res: Response, next: NextFunction) {
@@ -267,15 +269,46 @@ export async function bulkUpdateInventory(req: Request, res: Response, next: Nex
     const results = [];
 
     for (const update of updates) {
-      const product = await Product.findOne({ sku: update.sku.toUpperCase() });
+      const sku = update.sku.toUpperCase();
+      let product = await Product.findOne({ sku });
+      let isVariant = false;
+      let variantIdx = -1;
+
       if (!product) {
-        results.push({ sku: update.sku, success: false, error: 'Product not found' });
+        product = await Product.findOne({ 'variants.sku': sku });
+        if (product) {
+          isVariant = true;
+          variantIdx = product.variants.findIndex(v => v.sku?.toUpperCase() === sku);
+        }
+      }
+
+      if (!product) {
+        results.push({ sku: update.sku, success: false, error: 'Product or variant not found with this SKU' });
         continue;
       }
 
-      product.inventory = update.inventory;
-      if (update.lowStockThreshold !== undefined) {
-        product.lowStockThreshold = update.lowStockThreshold;
+      if (isVariant && variantIdx !== -1) {
+        const variant = product.variants[variantIdx];
+        variant.inventory = update.inventory;
+        
+        if (update.price !== undefined) {
+          variant.priceModifier = update.price - product.price;
+        }
+        if (update.comparePrice !== undefined) {
+          variant.comparePriceModifier = update.comparePrice - (product.comparePrice ?? product.price);
+        }
+      } else {
+        product.inventory = update.inventory;
+        
+        if (update.lowStockThreshold !== undefined) {
+          product.lowStockThreshold = update.lowStockThreshold;
+        }
+        if (update.price !== undefined) {
+          product.price = update.price;
+        }
+        if (update.comparePrice !== undefined) {
+          product.comparePrice = update.comparePrice;
+        }
       }
 
       await product.save();
@@ -283,5 +316,142 @@ export async function bulkUpdateInventory(req: Request, res: Response, next: Nex
     }
 
     res.json({ success: true, results });
+  } catch (err) { next(err); }
+}
+
+export async function bulkUpdatePrices(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) {
+      throw createError('No file uploaded', 400);
+    }
+
+    const fileContent = req.file.buffer.toString('utf-8');
+    const lines = fileContent.split(/\r?\n/).filter(line => line.trim().length > 0);
+    
+    if (lines.length < 2) {
+      throw createError('CSV file is empty or missing data lines', 400);
+    }
+
+    const parseCsvLine = (line: string): string[] => {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+
+    const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+    
+    const skuIdx = headers.findIndex(h => h.includes('sku'));
+    const priceIdx = headers.findIndex(h => h.includes('price') && !h.includes('compare') && !h.includes('mrp'));
+    const mrpIdx = headers.findIndex(h => h.includes('mrp') || h.includes('compareprice') || h.includes('compare price') || h.includes('compare_price') || h.includes('original price'));
+
+    if (skuIdx === -1) {
+      throw createError('CSV must contain a "SKU" column', 400);
+    }
+    if (priceIdx === -1 && mrpIdx === -1) {
+      throw createError('CSV must contain at least a "Price" (selling price) or "MRP" (compare price) column', 400);
+    }
+
+    const results = [];
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCsvLine(lines[i]);
+      if (values.length < headers.length) {
+        continue; // Skip malformed lines
+      }
+
+      const sku = values[skuIdx]?.toUpperCase();
+      if (!sku) {
+        failCount++;
+        results.push({ row: i + 1, success: false, error: 'SKU is empty' });
+        continue;
+      }
+
+      let product = await Product.findOne({ sku });
+      let isVariant = false;
+      let variantIdx = -1;
+
+      if (!product) {
+        product = await Product.findOne({ 'variants.sku': sku });
+        if (product) {
+          isVariant = true;
+          variantIdx = product.variants.findIndex(v => v.sku?.toUpperCase() === sku);
+        }
+      }
+
+      if (!product) {
+        failCount++;
+        results.push({ sku, row: i + 1, success: false, error: 'Product or variant not found with this SKU' });
+        continue;
+      }
+
+      const updateData: any = {};
+
+      if (isVariant && variantIdx !== -1) {
+        const variant = product.variants[variantIdx];
+        if (priceIdx !== -1) {
+          const priceVal = parseFloat(values[priceIdx]);
+          if (!isNaN(priceVal)) {
+            const modifier = priceVal - product.price;
+            variant.priceModifier = modifier;
+            updateData.priceModifier = modifier;
+          }
+        }
+        if (mrpIdx !== -1) {
+          const mrpVal = parseFloat(values[mrpIdx]);
+          if (!isNaN(mrpVal)) {
+            const compModifier = mrpVal - (product.comparePrice ?? product.price);
+            variant.comparePriceModifier = compModifier;
+            updateData.comparePriceModifier = compModifier;
+          }
+        }
+      } else {
+        if (priceIdx !== -1) {
+          const priceVal = parseFloat(values[priceIdx]);
+          if (!isNaN(priceVal)) {
+            product.price = priceVal;
+            updateData.price = priceVal;
+          }
+        }
+        if (mrpIdx !== -1) {
+          const mrpVal = parseFloat(values[mrpIdx]);
+          if (!isNaN(mrpVal)) {
+            product.comparePrice = mrpVal;
+            updateData.comparePrice = mrpVal;
+          }
+        }
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        failCount++;
+        results.push({ sku, row: i + 1, success: false, error: 'No valid price/MRP numeric values to update' });
+        continue;
+      }
+
+      await product.save();
+      successCount++;
+      results.push({ sku, row: i + 1, success: true, updated: updateData });
+    }
+
+    res.json({
+      success: true,
+      message: `Bulk price update complete. Success: ${successCount}, Failed: ${failCount}`,
+      summary: { success: successCount, failed: failCount },
+      results
+    });
   } catch (err) { next(err); }
 }
