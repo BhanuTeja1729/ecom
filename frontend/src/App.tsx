@@ -15,6 +15,7 @@ const Shop = lazy(() => import('./pages/Shop').then(m => ({ default: m.Shop })))
 const ProductDetail = lazy(() => import('./pages/ProductDetail').then(m => ({ default: m.ProductDetail })));
 const Cart = lazy(() => import('./pages/Cart').then(m => ({ default: m.Cart })));
 const Checkout = lazy(() => import('./pages/Checkout').then(m => ({ default: m.Checkout })));
+const CheckoutVerify = lazy(() => import('./pages/CheckoutVerify').then(m => ({ default: m.CheckoutVerify })));
 const Auth = lazy(() => import('./pages/Auth').then(m => ({ default: m.Auth })));
 const ResetPassword = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
@@ -108,6 +109,7 @@ function AppRouter() {
     if (path.startsWith('/product/') && params.slug) return <CustomerRoute><ProductDetail slug={params.slug} /></CustomerRoute>;
     if (path === '/cart') return <CustomerRoute><Cart /></CustomerRoute>;
     if (path === '/checkout') return <CustomerRoute><Checkout /></CustomerRoute>;
+    if (path === '/checkout-verify') return <CustomerRoute><CheckoutVerify /></CustomerRoute>;
     if (path === '/dashboard') return <CustomerRoute><Dashboard /></CustomerRoute>;
     if (path === '/order-tracking') return <CustomerRoute><OrderTracking /></CustomerRoute>;
 

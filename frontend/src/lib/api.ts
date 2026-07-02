@@ -151,9 +151,13 @@ export const orderApi = {
   },
   get: (orderNumber: string) => api.get<{ success: boolean; data: any }>(`/orders/${orderNumber}`),
   cancel: (orderNumber: string, reason?: string) => api.put<{ success: boolean; data: any }>(`/orders/${orderNumber}/cancel`, { reason }),
+  requestReturn: (orderNumber: string, reason: string, description?: string) => api.put<{ success: boolean; data: any }>(`/orders/${orderNumber}/return`, { reason, description }),
 };
 
-// Payment via Razorpay removed — app uses Cash on Delivery (COD).
+// ─── Payment ─────────────────────────────────────────────────────────────────
+export const paymentApi = {
+  verifyCashfree: (orderNumber: string) => api.post<{ success: boolean; data: any }>('/payment/cashfree/verify', { orderNumber }),
+};
 
 // ─── User ────────────────────────────────────────────────────────────────────
 export const userApi = {
@@ -209,6 +213,8 @@ export const deliveryApi = {
     api.get<{ success: boolean; data: any }>('/delivery/stats'),
   verifyCode: (id: string, code: string) =>
     api.post<{ success: boolean; data: any }>(`/delivery/orders/${id}/verify-code`, { code }),
+  verifyReturnCode: (id: string, code: string) =>
+    api.post<{ success: boolean; data: any }>(`/delivery/orders/${id}/verify-return`, { code }),
 };
 
 // ─── Media ───────────────────────────────────────────────────────────────────
