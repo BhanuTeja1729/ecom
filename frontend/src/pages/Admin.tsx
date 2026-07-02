@@ -1128,7 +1128,14 @@ export function Admin() {
                       <td className="px-4 py-3 text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-gray-600">{o.items?.length ?? 0}</td>
                       <td className="px-4 py-3 font-bold text-gray-900">{fmt(o.total)}</td>
-                      <td className="px-4 py-3"><Badge variant={STATUS_BADGE[o.status] ?? 'default'}>{o.status}</Badge></td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant={STATUS_BADGE[o.status] ?? 'default'}>{o.status}</Badge>
+                          {o.paymentStatus === 'refunded' && (
+                            <Badge variant="warning">↩ refunded</Badge>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {ordersPage.length === 0 && (

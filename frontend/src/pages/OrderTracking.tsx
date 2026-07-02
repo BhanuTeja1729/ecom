@@ -579,15 +579,21 @@ export function OrderTracking() {
                 </div>
               )}
 
-              {/* Cancelled/Refunded status */}
+              {/* Cancelled status */}
               {isCancelled && (
                 <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
                   <p className="font-bold text-red-700 text-sm">
                     This order has been {order.status}.
                   </p>
-                  <p className="text-xs text-red-600 mt-1">
-                    A refund has been initiated to your original payment method. If you have questions, please contact our support team.
-                  </p>
+                  {order.paymentStatus === 'refunded' ? (
+                    <p className="text-xs text-emerald-700 mt-1 font-semibold">
+                      ✅ A refund has been submitted to Cashfree and will be credited to your original payment method within 5–7 business days.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-600 mt-1">
+                      {order.paymentMethod === 'cod' ? 'No payment was collected for this COD order.' : 'If you have questions, please contact our support team.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -699,7 +705,11 @@ export function OrderTracking() {
                         <div key={i} className="flex items-start gap-4 relative">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 border-2 ${
                             isLatest
-                              ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-200/50'
+                              ? event.status === 'refunded'
+                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-200/50'
+                                : event.status === 'cancelled'
+                                  ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200/50'
+                                  : 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-200/50'
                               : 'bg-white border-gray-200 text-gray-400'
                           }`}>
                             {isLatest ? <Check className="w-3 h-3" /> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full" />}

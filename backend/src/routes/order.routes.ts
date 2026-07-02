@@ -4,7 +4,7 @@ import { authenticate, optionalAuth, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/', optionalAuth, createOrder);
+router.post('/', authenticate, createOrder);
 router.get('/', authenticate, getOrders);
 router.get('/:orderNumber', authenticate, getOrder);
 router.put('/:id/status', authenticate, requireAdmin, updateOrderStatus);

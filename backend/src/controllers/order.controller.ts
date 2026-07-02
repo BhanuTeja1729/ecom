@@ -221,7 +221,7 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
             customer_name: customerName,
           },
           order_meta: {
-            return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout-verify?order_id=${order.orderNumber}`
+            return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout-verify?order_id={order_id}`
           }
         };
 
@@ -267,12 +267,25 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
 
 export async function getOrders(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
-    const { page = '1', limit = '10' } = req.query as Record<string, string>;
+    const { page = '1', limit = '10', all } = req.query as Record<string, string>;
+    const query = (req.user?.role === 'admin' && all === 'true') ? {} : { user: req.user?.id };
+
+    if (all === 'true' && req.user?.role === 'admin') {
+      const [orders, total] = await Promise.all([
+        Order.find(query).sort({ createdAt: -1 }).lean(),
+        Order.countDocuments(query),
+      ]);
+      return res.json({
+        success: true,
+        data: orders,
+        pagination: { page: 1, limit: total, total, pages: 1 }
+      });
+    }
+
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const query = (req.user?.role === 'admin' && req.query.all === 'true') ? {} : { user: req.user?.id };
     const [orders, total] = await Promise.all([
       Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
       Order.countDocuments(query),
@@ -284,7 +297,9 @@ export async function getOrders(req: Request & { user?: any }, res: Response, ne
 export async function getOrder(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const query: any = { orderNumber: req.params.orderNumber };
-    if (req.user?.role !== 'admin') query.user = req.user?.id;
+    if (req.user?.role !== 'admin' && req.user?.role !== 'delivery_partner') {
+      query.user = req.user?.id;
+    }
 
     const order = await Order.findOne(query).populate('items.product', 'name images slug').lean();
     if (!order) throw createError('Order not found', 404);
@@ -294,18 +309,78 @@ export async function getOrder(req: Request & { user?: any }, res: Response, nex
 
 export async function updateOrderStatus(req: Request, res: Response, next: NextFunction) {
   try {
-    const { status, message } = z.object({ status: z.string(), message: z.string().optional() }).parse(req.body);
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        $push: { statusHistory: { status, message, timestamp: new Date() } },
-        ...(status === 'shipped' ? { shippedAt: new Date() } : {}),
-        ...(status === 'delivered' ? { deliveredAt: new Date() } : {}),
-      },
-      { new: true }
-    );
+    const { status, message } = z.object({
+      status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded', 'return_requested']),
+      message: z.string().optional()
+    }).parse(req.body);
+    
+    const order = await Order.findById(req.params.id);
     if (!order) throw createError('Order not found', 404);
+
+    // If changing status to cancelled, process refund for paid online orders
+    if (status === 'cancelled') {
+      const isOnlineRefund = (order.paymentMethod === 'cashfree' || order.paymentMethod === 'online') && order.paymentStatus === 'paid';
+
+      if (isOnlineRefund) {
+        const cashfreeAppId = process.env.CASHFREE_APP_ID;
+        const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+        const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+
+        const cashfreeUrl = cashfreeEnv === 'production'
+          ? `https://api.cashfree.com/pg/orders/${order.orderNumber}/refunds`
+          : `https://sandbox.cashfree.com/pg/orders/${order.orderNumber}/refunds`;
+
+        const refundId = `ref_cancel_admin_${order.orderNumber}_${Date.now()}`;
+        const refundBody = {
+          refund_amount: order.total,
+          refund_id: refundId,
+          refund_note: `Order cancelled by admin`
+        };
+
+        const refundResponse = await fetch(cashfreeUrl, {
+          method: 'POST',
+          headers: {
+            'x-api-version': '2023-08-01',
+            'x-client-id': cashfreeAppId || '',
+            'x-client-secret': cashfreeSecret || '',
+            'x-idempotency-key': refundId,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(refundBody)
+        });
+
+        if (!refundResponse.ok) {
+          const errBody = (await refundResponse.json().catch(() => ({}))) as any;
+          console.error('[Admin Cancel Order Refund] Cashfree refund API error:', errBody);
+          throw createError(errBody.message || `Cashfree refund failed with HTTP ${refundResponse.status}`, 400);
+        }
+
+        const refundData = (await refundResponse.json().catch(() => ({}))) as any;
+        order.paymentStatus = 'refunded';
+        order.statusHistory.push({
+          status: 'refunded',
+          message: `Refund of ₹${order.total} initiated via Cashfree (Refund ID: ${refundData.refund_id || refundId}). It will be credited to your original payment method.`,
+          timestamp: new Date(),
+        });
+      }
+    }
+
+    order.status = status;
+    order.statusHistory.push({ status, message: message || `Status updated to ${status}`, timestamp: new Date() });
+    if (status === 'shipped') order.shippedAt = new Date();
+    if (status === 'delivered') order.deliveredAt = new Date();
+    
+    await order.save();
+
+    // Restore inventory if order is cancelled
+    if (status === 'cancelled') {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.product, {
+          $inc: { inventory: item.quantity, soldCount: -item.quantity },
+        });
+      }
+    }
+
     res.json({ success: true, data: order });
   } catch (err) { next(err); }
 }
@@ -328,6 +403,52 @@ export async function cancelOrder(req: Request & { user?: any }, res: Response, 
     // Only allow cancellation for pending/confirmed orders
     if (!['pending', 'confirmed'].includes(order.status)) {
       throw createError(`Cannot cancel an order with status "${order.status}". Only pending or confirmed orders can be cancelled.`, 400);
+    }
+
+    // Check if a refund should be processed (for online payments that are paid)
+    const isOnlineRefund = (order.paymentMethod === 'cashfree' || order.paymentMethod === 'online') && order.paymentStatus === 'paid';
+
+    if (isOnlineRefund) {
+      const cashfreeAppId = process.env.CASHFREE_APP_ID;
+      const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+      const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+
+      const cashfreeUrl = cashfreeEnv === 'production'
+        ? `https://api.cashfree.com/pg/orders/${order.orderNumber}/refunds`
+        : `https://sandbox.cashfree.com/pg/orders/${order.orderNumber}/refunds`;
+
+      const refundId = `ref_cancel_${order.orderNumber}_${Date.now()}`;
+      const refundBody = {
+        refund_amount: order.total,
+        refund_id: refundId,
+        refund_note: `Order cancelled before delivery partner assignment`
+      };
+
+      const refundResponse = await fetch(cashfreeUrl, {
+        method: 'POST',
+        headers: {
+          'x-api-version': '2023-08-01',
+          'x-client-id': cashfreeAppId || '',
+          'x-client-secret': cashfreeSecret || '',
+          'x-idempotency-key': refundId,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(refundBody)
+      });
+
+      if (!refundResponse.ok) {
+        const errBody = (await refundResponse.json().catch(() => ({}))) as any;
+        console.error('[Cancel Order Refund] Cashfree refund API error:', errBody);
+        throw createError(errBody.message || `Cashfree refund failed with HTTP ${refundResponse.status}`, 400);
+      }
+
+      const refundData = (await refundResponse.json().catch(() => ({}))) as any;
+      order.paymentStatus = 'refunded';
+      order.statusHistory.push({
+        status: 'refunded',
+        message: `Refund of ₹${order.total} initiated via Cashfree (Refund ID: ${refundData.refund_id || refundId}). It will be credited to your original payment method.`,
+        timestamp: new Date(),
+      });
     }
 
     // Cancel the order
