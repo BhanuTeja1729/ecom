@@ -22,7 +22,7 @@ export interface IOrder extends Document {
   orderNumber: string;
   user?: mongoose.Types.ObjectId;
   guestEmail?: string;
-  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded' | 'return_requested';
   paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
   items: IOrderItem[];
   subtotal: number;
@@ -36,6 +36,9 @@ export interface IOrder extends Document {
   paymentMethod?: string;
   paymentIntentId?: string;
   deliveryCode?: string;       // 6-digit COD verification code (set when shipped)
+  returnReason?: string;
+  returnDescription?: string;
+  returnCode?: string;         // 6-digit return verification code
   notes?: string;
   trackingNumber?: string;
   scheduledDeliveryDate?: Date;
@@ -77,7 +80,7 @@ const OrderSchema = new Schema<IOrder>({
   orderNumber: { type: String, required: true, unique: true },
   user: { type: Schema.Types.ObjectId, ref: 'User' },
   guestEmail: String,
-  status: { type: String, enum: ['pending','confirmed','processing','shipped','delivered','cancelled','refunded'], default: 'pending' },
+  status: { type: String, enum: ['pending','confirmed','processing','shipped','delivered','cancelled','refunded','return_requested'], default: 'pending' },
   paymentStatus: { type: String, enum: ['pending','paid','failed','refunded'], default: 'pending' },
   items: [OrderItemSchema],
   subtotal: { type: Number, required: true },
@@ -91,6 +94,9 @@ const OrderSchema = new Schema<IOrder>({
   paymentMethod: String,
   paymentIntentId: String,
   deliveryCode: String,         // 6-digit delivery verification code
+  returnReason: String,
+  returnDescription: String,
+  returnCode: String,           // 6-digit return verification code
   notes: String,
   trackingNumber: String,
   scheduledDeliveryDate: Date,

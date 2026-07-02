@@ -90,6 +90,7 @@ export function Checkout() {
 
 
   const [step, setStep] = useState<Step>('shipping');
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'online'>('online');
   const [shipping, setShipping] = useState<ShippingForm>(() => ({
     ...EMPTY_SHIPPING,
     email: user?.email || '',
@@ -317,8 +318,8 @@ export function Checkout() {
     setStep('review');
   }
 
-  // ── COD Order Placement ─────────────────────────────────────────────────────
-  async function handlePlaceCODOrder() {
+  // ── Order Placement ────────────────────────────────────────────────────────
+  async function handlePlaceOrder() {
     if (!user) { navigate('/auth'); return; }
 
     setSubmitting(true);
@@ -338,7 +339,7 @@ export function Checkout() {
           latitude: shipping.latitude,
           longitude: shipping.longitude,
         },
-        paymentMethod: 'cod',
+        paymentMethod,
         couponCode: coupon?.code ?? '',
         scheduledDeliveryDate: selectedDate?.toISOString(),
         scheduledDeliverySlot: selectedSlot ? TIME_SLOTS.find(s => s.id === selectedSlot)?.time : undefined,
@@ -350,9 +351,33 @@ export function Checkout() {
           quantity: item.quantity,
         })),
       });
-      setOrderNumber(orderRes.data.orderNumber);
-      clearCart();
-      toast('Order placed successfully! Pay cash on delivery.', 'success');
+
+      if (paymentMethod === 'cod') {
+        setOrderNumber(orderRes.data.orderNumber);
+        clearCart();
+        toast('Order placed successfully! Pay cash on delivery.', 'success');
+      } else {
+        const paymentSessionId = (orderRes as any).paymentSessionId;
+        const orderId = orderRes.data.orderNumber;
+        
+        if (!paymentSessionId) {
+          throw new Error('Online payment session could not be created. Please try again.');
+        }
+
+        const CashfreeLib = (window as any).Cashfree;
+        if (!CashfreeLib) {
+          throw new Error('Cashfree SDK is not loaded. Please try again.');
+        }
+
+        const cashfree = CashfreeLib({
+          mode: 'sandbox',
+        });
+
+        await cashfree.checkout({
+          paymentSessionId,
+          returnUrl: `${window.location.origin}/checkout-verify?order_id=${orderId}`,
+        });
+      }
     } catch (err: any) {
       toast(err.message || 'Order placement failed.', 'error');
     } finally {
@@ -876,45 +901,114 @@ export function Checkout() {
                   })}
                 </div>
 
-                {/* COD Payment info */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <Banknote className="w-4 h-4 text-amber-700" />
+                {/* Payment Method Selection */}
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Select Payment Method</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('online')}
+                    className={`flex items-center gap-3 p-4 border rounded-xl transition-all text-left outline-none ${paymentMethod === 'online' ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
                     </div>
                     <div>
-                      <p className="text-sm font-black text-amber-800">Cash on Delivery</p>
-                      <p className="text-xs text-amber-700">Pay when your order arrives at your door</p>
+                      <p className="text-sm font-black text-gray-900">Pay Online</p>
+                      <p className="text-xs text-gray-500">Cards, UPI, Netbanking</p>
                     </div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-amber-200">
-                    <div className="flex items-start gap-2">
-                      <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-700">
-                        A 6-digit verification code will be sent to your tracking page once your order is out for delivery. Share it with the delivery agent to confirm receipt.
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cod')}
+                    className={`flex items-center gap-3 p-4 border rounded-xl transition-all text-left outline-none ${paymentMethod === 'cod' ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${paymentMethod === 'cod' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <Banknote className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900">Cash on Delivery</p>
+                      <p className="text-xs text-gray-500">Pay cash at your door</p>
+                    </div>
+                  </button>
+                </div>
+
+                {/* Online Payment info */}
+                {paymentMethod === 'online' && (
+                  <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg className="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-blue-800">Secure Online Checkout</p>
+                        <p className="text-xs text-blue-700">Powered by Cashfree Payments</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-blue-200">
+                      <p className="text-xs text-blue-700 leading-relaxed">
+                        After clicking "Pay Now", you will be redirected to the secure Cashfree payment portal to complete your transaction.
                       </p>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* COD Payment info */}
+                {paymentMethod === 'cod' && (
+                  <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <Banknote className="w-4 h-4 text-amber-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-amber-800">Cash on Delivery</p>
+                        <p className="text-xs text-amber-700">Pay when your order arrives at your door</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-amber-200">
+                      <div className="flex items-start gap-2">
+                        <Shield className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-700">
+                          A 6-digit verification code will be sent to your tracking page once your order is out for delivery. Share it with the delivery agent to confirm receipt.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3 mt-6">
                   <button type="button" onClick={() => setStep('schedule')} className="flex-1 py-4 border border-gray-200 text-gray-700 font-bold rounded-xl hover:border-gray-300 transition-colors">
                     Back
                   </button>
                   <button
-                    onClick={handlePlaceCODOrder}
+                    onClick={handlePlaceOrder}
                     disabled={submitting}
                     className="flex-1 py-4 bg-amber-500 text-white font-bold text-lg rounded-xl hover:bg-amber-400 transition-all shadow-lg shadow-amber-200 disabled:opacity-60 flex items-center justify-center gap-2"
                   >
                     {submitting ? (
                       <>
                         <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Placing Order...
+                        {paymentMethod === 'cod' ? 'Placing Order...' : 'Redirecting...'}
                       </>
                     ) : (
                       <>
-                        <Package className="w-5 h-5" />
-                        Place Order — {fmt(orderTotal)}
+                        {paymentMethod === 'cod' ? (
+                          <>
+                            <Package className="w-5 h-5" />
+                            Place Order — {fmt(orderTotal)}
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Pay Now — {fmt(orderTotal)}
+                          </>
+                        )}
                       </>
                     )}
                   </button>
@@ -922,7 +1016,11 @@ export function Checkout() {
 
                 <div className="mt-3 p-3 bg-gray-50 rounded-xl flex items-center gap-2">
                   <Banknote className="w-4 h-4 text-gray-400" />
-                  <p className="text-xs text-gray-500">No online payment needed. Pay <strong>{fmt(orderTotal)}</strong> in cash when your delivery arrives.</p>
+                  {paymentMethod === 'cod' ? (
+                    <p className="text-xs text-gray-500">No online payment needed. Pay <strong>{fmt(orderTotal)}</strong> in cash when your delivery arrives.</p>
+                  ) : (
+                    <p className="text-xs text-gray-500">Pay securely online using credit card, debit card, UPI, netbanking or wallets.</p>
+                  )}
                 </div>
               </div>
             )}
@@ -1092,12 +1190,21 @@ export function Checkout() {
                 <div className="flex justify-between font-black text-gray-900 text-lg pt-2 border-t border-gray-200"><span>Total</span><span>{fmt(orderTotal)}</span></div>
               </div>
 
-              {/* COD badge in sidebar */}
+              {/* Payment Method badge in sidebar */}
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <Banknote className="w-4 h-4 text-amber-600 shrink-0" />
-                  <p className="text-xs text-amber-700 font-semibold">Cash on Delivery — pay when it arrives!</p>
-                </div>
+                {paymentMethod === 'cod' ? (
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <Banknote className="w-4 h-4 text-amber-600 shrink-0" />
+                    <p className="text-xs text-amber-700 font-semibold">Cash on Delivery — pay when it arrives!</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                    <svg className="w-4 h-4 text-blue-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <p className="text-xs text-blue-700 font-semibold">Online Payment via Cashfree</p>
+                  </div>
+                )}
               </div>
 
               {/* Delivery schedule in sidebar */}

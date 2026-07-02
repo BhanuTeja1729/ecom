@@ -205,12 +205,12 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
       {
         $group: {
           _id: '$assignedDeliveryPartner',
-          completedCount: { $sum: { $cond: [{ $eq: ['$status', 'delivered'] }, 1, 0] } },
-          activeCount: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipped']] }, 1, 0] } },
+          completedCount: { $sum: { $cond: [{ $in: ['$status', ['delivered', 'refunded']] }, 1, 0] } },
+          activeCount: { $sum: { $cond: [{ $in: ['$status', ['confirmed', 'processing', 'shipped', 'return_requested']] }, 1, 0] } },
           totalEarnings: {
             $sum: {
               $cond: [
-                { $eq: ['$status', 'delivered'] },
+                { $in: ['$status', ['delivered', 'refunded']] },
                 { $ifNull: ['$deliveryPayout', 0] },
                 0
               ]
@@ -221,7 +221,7 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
               $cond: [
                 {
                   $and: [
-                    { $eq: ['$status', 'delivered'] },
+                    { $in: ['$status', ['delivered', 'refunded']] },
                     { $ne: ['$deliveryPayoutStatus', 'paid'] }
                   ]
                 },
@@ -233,7 +233,13 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
           cashInHand: {
             $sum: {
               $cond: [
-                { $eq: ['$codCashStatus', 'with_partner'] },
+                {
+                  $and: [
+                    { $eq: ['$status', 'delivered'] },
+                    { $eq: ['$codCashStatus', 'with_partner'] },
+                    { $eq: [{ $in: ['$paymentMethod', ['online', 'cashfree']] }, false] }
+                  ]
+                },
                 { $ifNull: ['$codAmount', 0] },
                 0
               ]
@@ -242,7 +248,13 @@ export async function getDeliveryPartners(req: Request, res: Response, next: Nex
           cashRemitted: {
             $sum: {
               $cond: [
-                { $eq: ['$codCashStatus', 'remitted'] },
+                {
+                  $and: [
+                    { $eq: ['$status', 'delivered'] },
+                    { $eq: ['$codCashStatus', 'remitted'] },
+                    { $eq: [{ $in: ['$paymentMethod', ['online', 'cashfree']] }, false] }
+                  ]
+                },
                 { $ifNull: ['$codAmount', 0] },
                 0
               ]
@@ -429,23 +441,150 @@ export async function updateDeliveryRate(req: Request, res: Response, next: Next
   } catch (err) { next(err); }
 }
 
-export async function payDeliveryPartnerSalary(req: Request, res: Response, next: NextFunction) {
+export async function payDeliveryPartnerSalary(req: Request & { user?: any }, res: Response, next: NextFunction) {
   try {
     const partnerId = req.params.id;
     const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
     if (!partner) throw createError('Delivery partner not found', 404);
 
-    // Update all delivered, unpaid orders of this partner to paid
-    const result = await Order.updateMany(
-      { assignedDeliveryPartner: partnerId, status: 'delivered', deliveryPayoutStatus: { $ne: 'paid' } },
-      { $set: { deliveryPayoutStatus: 'paid' } }
-    );
+    // 1. Calculate unpaid earnings
+    const unpaidOrders = await Order.find({
+      assignedDeliveryPartner: partnerId,
+      status: 'delivered',
+      deliveryPayoutStatus: { $ne: 'paid' }
+    });
+
+    if (unpaidOrders.length === 0) {
+      throw createError('No unpaid deliveries found for this partner', 400);
+    }
+
+    const totalSalary = unpaidOrders.reduce((sum, order) => sum + (order.deliveryPayout ?? 50), 0);
+
+    // 2. Validate partner UPI ID
+    if (!partner.upiId || !partner.upiId.trim()) {
+      throw createError(`Cannot process Cashfree payment: ${partner.fullName} does not have a UPI ID configured.`, 400);
+    }
+
+    // 3. Initiate Cashfree Payment Gateway order creation (just like customer side)
+    const cashfreeAppId = process.env.CASHFREE_APP_ID;
+    const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+    const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+
+    const cashfreeUrl = cashfreeEnv === 'production'
+      ? 'https://api.cashfree.com/pg/orders'
+      : 'https://sandbox.cashfree.com/pg/orders';
+
+    const orderId = `sal_pay_${partner._id.toString()}_${Date.now()}`;
+    
+    // Ensure phone number has 10 digits
+    let phoneNum = req.user?.phone || '9999999999';
+    phoneNum = phoneNum.replace(/\D/g, '');
+    if (phoneNum.length > 10) phoneNum = phoneNum.slice(-10);
+    if (phoneNum.length < 10) phoneNum = '9999999999';
+
+    const cashfreeBody = {
+      order_id: orderId,
+      order_amount: Number(totalSalary.toFixed(2)),
+      order_currency: 'INR',
+      customer_details: {
+        customer_id: req.user?.id ? `admin_${req.user.id.toString()}` : `admin_${Date.now()}`,
+        customer_email: req.user?.email || 'admin@ecom.dev',
+        customer_phone: phoneNum,
+        customer_name: req.user?.fullName || 'Admin User',
+      },
+      order_meta: {
+        return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin?tab=employees&verify_payout=${orderId}&partner_id=${partnerId}`
+      }
+    };
+
+    console.log(`[Cashfree Payout via PG] Creating payment order for partner ${partner.fullName} (Amount: ₹${totalSalary})`);
+
+    const response = await fetch(cashfreeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-version': '2023-08-01',
+        'x-client-id': cashfreeAppId || '',
+        'x-client-secret': cashfreeSecret || ''
+      },
+      body: JSON.stringify(cashfreeBody)
+    });
+
+    if (!response.ok) {
+      const errBody = (await response.json().catch(() => ({}))) as any;
+      console.error('[Cashfree Payout via PG] Creation error:', errBody);
+      throw createError(errBody.message || `Cashfree PG API returned HTTP ${response.status}`, 400);
+    }
+
+    const responseData = (await response.json()) as any;
+    const paymentSessionId = responseData.payment_session_id;
 
     res.json({
       success: true,
-      message: `Salary paid successfully. Updated ${result.modifiedCount} orders.`,
-      modifiedCount: result.modifiedCount
+      message: 'Payment session created successfully.',
+      paymentSessionId,
+      orderId,
+      totalSalary
     });
+  } catch (err) { next(err); }
+}
+
+export async function verifyDeliveryPartnerPayout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { orderId, partnerId } = req.body;
+    if (!orderId || !partnerId) {
+      throw createError('OrderId and PartnerId are required', 400);
+    }
+
+    const partner = await User.findOne({ _id: partnerId, role: 'delivery_partner' });
+    if (!partner) throw createError('Delivery partner not found', 404);
+
+    const cashfreeAppId = process.env.CASHFREE_APP_ID;
+    const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+    const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+
+    const cashfreeUrl = cashfreeEnv === 'production'
+      ? `https://api.cashfree.com/pg/orders/${orderId}`
+      : `https://sandbox.cashfree.com/pg/orders/${orderId}`;
+
+    const response = await fetch(cashfreeUrl, {
+      method: 'GET',
+      headers: {
+        'x-api-version': '2023-08-01',
+        'x-client-id': cashfreeAppId || '',
+        'x-client-secret': cashfreeSecret || '',
+      },
+    });
+
+    if (!response.ok) {
+      const errBody = (await response.json().catch(() => ({}))) as any;
+      console.error('[Cashfree Payout via PG] Verification API error:', errBody);
+      throw createError(errBody.message || `Cashfree returned HTTP ${response.status}`, 400);
+    }
+
+    const responseData = (await response.json()) as any;
+    const orderStatus = responseData.order_status;
+
+    if (orderStatus === 'PAID') {
+      // Payment successful!
+      // Update all delivered, unpaid orders of this partner to paid
+      const result = await Order.updateMany(
+        { assignedDeliveryPartner: partnerId, status: 'delivered', deliveryPayoutStatus: { $ne: 'paid' } },
+        { $set: { deliveryPayoutStatus: 'paid' } }
+      );
+
+      res.json({
+        success: true,
+        message: `Salary paid successfully via Cashfree Payment Gateway. Updated ${result.modifiedCount} orders.`,
+        modifiedCount: result.modifiedCount
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: `Payment verification failed. Cashfree order status: ${orderStatus}`,
+        orderStatus
+      });
+    }
   } catch (err) { next(err); }
 }
 
@@ -462,6 +601,7 @@ export async function recordRemittance(req: Request, res: Response, next: NextFu
       assignedDeliveryPartner: partnerId,
       status: 'delivered',
       codCashStatus: 'with_partner',
+      paymentMethod: { $nin: ['online', 'cashfree'] },
     });
 
     if (pendingOrders.length === 0) {
@@ -482,6 +622,7 @@ export async function recordRemittance(req: Request, res: Response, next: NextFu
         assignedDeliveryPartner: partnerId,
         status: 'delivered',
         codCashStatus: 'with_partner',
+        paymentMethod: { $nin: ['online', 'cashfree'] },
       },
       { $set: { codCashStatus: 'remitted' } }
     );

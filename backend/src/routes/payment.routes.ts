@@ -1,5 +1,9 @@
-// Payment routes via Razorpay have been removed.
-// The app now uses Cash on Delivery (COD) — no payment gateway needed.
 import { Router } from 'express';
+import { verifyCashfreePayment } from '../controllers/payment.controller';
+
 const router = Router();
+
+router.post('/cashfree/verify', verifyCashfreePayment);
+
 export default router;
+

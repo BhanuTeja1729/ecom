@@ -142,7 +142,10 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
     const deliveryDistance = data.deliveryDistance ?? 0;
     const deliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
-    // COD orders are confirmed immediately — payment collected on delivery
+    const paymentMethod = data.paymentMethod || 'cod';
+    const isOnline = paymentMethod === 'online' || paymentMethod === 'cashfree';
+
+    // COD orders are confirmed immediately, online payments start as pending
     const order = await Order.create({
       orderNumber: generateOrderNumber(),
       user: req.user?.id,
@@ -156,34 +159,109 @@ export async function createOrder(req: Request & { user?: any }, res: Response, 
       couponCode,
       shippingAddress: data.shippingAddress,
       billingAddress: data.billingAddress,
-      paymentMethod: 'cod',
-      status: 'confirmed',
-      paymentStatus: 'pending', // Collected on delivery
+      paymentMethod,
+      status: isOnline ? 'pending' : 'confirmed',
+      paymentStatus: 'pending',
       scheduledDeliveryDate: data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : undefined,
       scheduledDeliverySlot: data.scheduledDeliverySlot,
       notes: data.notes,
       deliveryDistanceKm: deliveryDistance,
       deliveryPayout,
       statusHistory: [{
-        status: 'confirmed',
-        message: 'Order placed successfully. Pay cash on delivery.',
+        status: isOnline ? 'pending' : 'confirmed',
+        message: isOnline ? 'Order placed. Payment pending.' : 'Order placed successfully. Pay cash on delivery.',
         timestamp: new Date(),
       }],
     });
 
-    // Reduce inventory
+    // Reduce inventory immediately to hold the items
     for (const item of orderItems) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { inventory: -item.quantity, soldCount: item.quantity },
       });
     }
 
-    // Clear DB cart if it existed
-    if (hasDbCart) {
+    // Clear DB cart if it existed (only immediately for COD. Online carts will clear upon payment verification success)
+    if (hasDbCart && !isOnline) {
       await Cart.findByIdAndUpdate(cart!._id, { items: [], couponCode: undefined });
     }
 
-    res.status(201).json({ success: true, data: order });
+    let paymentSessionId = '';
+
+    if (isOnline) {
+      try {
+        const cashfreeAppId = process.env.CASHFREE_APP_ID;
+        const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+        const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+        
+        const cashfreeUrl = cashfreeEnv === 'production' 
+          ? 'https://api.cashfree.com/pg/orders' 
+          : 'https://sandbox.cashfree.com/pg/orders';
+
+        // Strip non-numeric characters from phone and ensure it has 10 digits
+        let phoneNum = order.shippingAddress.phone || req.user?.phone || '';
+        phoneNum = phoneNum.replace(/\D/g, '');
+        if (phoneNum.length > 10) {
+          phoneNum = phoneNum.slice(-10);
+        }
+        if (phoneNum.length < 10) {
+          phoneNum = '9999999999'; // Fallback phone number
+        }
+
+        const customerName = order.shippingAddress.fullName || req.user?.fullName || 'Guest Customer';
+
+        const cashfreeBody = {
+          order_id: order.orderNumber,
+          order_amount: Number(order.total.toFixed(2)),
+          order_currency: 'INR',
+          customer_details: {
+            customer_id: req.user?.id ? req.user.id.toString() : `guest_${Date.now()}`,
+            customer_email: order.guestEmail || req.user?.email || 'guest@example.com',
+            customer_phone: phoneNum,
+            customer_name: customerName,
+          },
+          order_meta: {
+            return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/checkout-verify?order_id=${order.orderNumber}`
+          }
+        };
+
+        const response = await fetch(cashfreeUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-version': '2023-08-01',
+            'x-client-id': cashfreeAppId || '',
+            'x-client-secret': cashfreeSecret || ''
+          },
+          body: JSON.stringify(cashfreeBody)
+        });
+
+        if (!response.ok) {
+          const errBody = (await response.json().catch(() => ({}))) as any;
+          console.error('Cashfree order creation error:', errBody);
+          throw new Error(errBody.message || `Cashfree API returned HTTP ${response.status}`);
+        }
+
+        const responseData = (await response.json()) as any;
+        paymentSessionId = responseData.payment_session_id;
+
+        // Save session id to paymentIntentId
+        order.paymentIntentId = paymentSessionId;
+        await order.save();
+      } catch (err: any) {
+        // Rollback inventory on failed session initiation
+        for (const item of orderItems) {
+          await Product.findByIdAndUpdate(item.product, {
+            $inc: { inventory: item.quantity, soldCount: -item.quantity },
+          });
+        }
+        // Rollback DB order
+        await Order.findByIdAndDelete(order._id);
+        throw createError(`Failed to initialize payment session: ${err.message}`, 500);
+      }
+    }
+
+    res.status(201).json({ success: true, data: order, paymentSessionId });
   } catch (err) { next(err); }
 }
 
@@ -272,3 +350,47 @@ export async function cancelOrder(req: Request & { user?: any }, res: Response, 
     res.json({ success: true, data: order });
   } catch (err) { next(err); }
 }
+
+export async function requestReturn(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const { orderNumber } = req.params;
+    const { reason, description } = z.object({
+      reason: z.string().min(1, 'Reason is required'),
+      description: z.string().optional()
+    }).parse(req.body);
+
+    const order = await Order.findOne({ orderNumber });
+    if (!order) throw createError('Order not found', 404);
+
+    // Only order owner or admin can request return
+    if (req.user?.role !== 'admin' && order.user?.toString() !== req.user?.id) {
+      throw createError('You are not authorized to return this order', 403);
+    }
+
+    // Only delivered orders can be returned
+    if (order.status !== 'delivered') {
+      throw createError('Only delivered orders can be returned', 400);
+    }
+
+    // Update status and details
+    order.status = 'return_requested';
+    // Clear delivery partner so any delivery partner can claim it as a return pickup task
+    order.assignedDeliveryPartner = undefined;
+    
+    // Generate a new 6-digit return verification code
+    order.returnCode = Math.floor(100000 + Math.random() * 900000).toString();
+    order.returnReason = reason;
+    order.returnDescription = description;
+
+    order.statusHistory.push({
+      status: 'return_requested',
+      message: `Return requested. Reason: "${reason}". Package return pickup pending.`,
+      timestamp: new Date()
+    });
+
+    await order.save();
+
+    res.json({ success: true, data: order });
+  } catch (err) { next(err); }
+}
+

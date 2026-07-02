@@ -68,7 +68,7 @@ function usePagination<T>(data: T[], defaultPageSize = 8) {
     </div>
   );
 
-  return { pageData, PaginationBar, setCurrentPage };
+  return { pageData, PaginationBar, setCurrentPage, pageSize };
 }
 
 // ── Sort & Filter hook ───────────────────────────────────────────────────────
@@ -462,6 +462,10 @@ export function Admin() {
   const [partnerFormError, setPartnerFormError] = useState('');
   const [deletePartnerTarget, setDeletePartnerTarget] = useState<any | null>(null);
   const [deletePartnerLoading, setDeletePartnerLoading] = useState(false);
+  const [paySalaryTarget, setPaySalaryTarget] = useState<any | null>(null);
+  const [paySalaryLoading, setPaySalaryLoading] = useState(false);
+  const [remittanceTarget, setRemittanceTarget] = useState<any | null>(null);
+  const [remittanceLoading, setRemittanceLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Coupon states
@@ -491,12 +495,12 @@ export function Admin() {
   const { processedData: sortedCoupons, FilterHeader: CouponHeader, DropdownHeader: CouponDropdown } = useTableSortAndFilter(coupons);
 
   // Pagination for each table
-  const { pageData: ordersPage, PaginationBar: OrdersPagination } = usePagination(sortedOrders, 8);
-  const { pageData: productsPage, PaginationBar: ProductsPagination } = usePagination(sortedProducts, 8);
-  const { pageData: customersPage, PaginationBar: CustomersPagination } = usePagination(sortedCustomers, 8);
-  const { pageData: partnersPage, PaginationBar: PartnersPagination } = usePagination(sortedPartners, 8);
-  const { pageData: categoriesPage, PaginationBar: CategoriesPagination } = usePagination(sortedCategories, 8);
-  const { pageData: couponsPage, PaginationBar: CouponsPagination } = usePagination(sortedCoupons, 8);
+  const { pageData: ordersPage, PaginationBar: OrdersPagination, pageSize: ordersPageSize } = usePagination(sortedOrders, 8);
+  const { pageData: productsPage, PaginationBar: ProductsPagination, pageSize: productsPageSize } = usePagination(sortedProducts, 8);
+  const { pageData: customersPage, PaginationBar: CustomersPagination, pageSize: customersPageSize } = usePagination(sortedCustomers, 8);
+  const { pageData: partnersPage, PaginationBar: PartnersPagination, pageSize: partnersPageSize } = usePagination(sortedPartners, 8);
+  const { pageData: categoriesPage, PaginationBar: CategoriesPagination, pageSize: categoriesPageSize } = usePagination(sortedCategories, 8);
+  const { pageData: couponsPage, PaginationBar: CouponsPagination, pageSize: couponsPageSize } = usePagination(sortedCoupons, 8);
 
   useEffect(() => { if (!loading && !isAdmin) navigate('/'); }, [isAdmin, loading, navigate]);
 
@@ -618,6 +622,36 @@ export function Admin() {
     fetchDeliveryPartners();
   }, [tab, fetchDeliveryPartners]);
 
+  // Verify delivery partner payout if verify_payout is in URL query parameters
+  useEffect(() => {
+    const verifyPayoutParam = new URLSearchParams(window.location.search).get('verify_payout');
+    const partnerIdParam = new URLSearchParams(window.location.search).get('partner_id');
+    
+    if (verifyPayoutParam && partnerIdParam) {
+      async function doVerify() {
+        toast('Verifying salary payout payment...', 'info');
+        try {
+          const res = await adminApi.verifyPayout(verifyPayoutParam!, partnerIdParam!);
+          if (res.success) {
+            toast('Salary payout verified & processed successfully! ✅', 'success');
+          } else {
+            toast(res.message || 'Salary payout verification failed.', 'error');
+          }
+        } catch (err: any) {
+          toast(err.message || 'An error occurred during payment verification.', 'error');
+        } finally {
+          // Clean up URL query parameters
+          const url = new URL(window.location.href);
+          url.searchParams.delete('verify_payout');
+          url.searchParams.delete('partner_id');
+          window.history.replaceState({}, '', url.toString());
+          fetchDeliveryPartners();
+        }
+      }
+      doVerify();
+    }
+  }, [fetchDeliveryPartners]);
+
   useEffect(() => {
     if (tab !== 'coupons' || !isAdmin) return;
     setCouponsLoading(true);
@@ -659,33 +693,56 @@ export function Admin() {
 
   async function handlePaySalary(partner: any) {
     if ((partner.unpaidEarnings ?? 0) <= 0) return;
-    const confirmPay = window.confirm(`Are you sure you want to mark salary as paid for ${partner.fullName}?\n\nThis will clear their pending payout of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} and reset it to ₹0.`);
-    if (!confirmPay) return;
+    setPaySalaryTarget(partner);
+  }
 
+  async function executePaySalary() {
+    if (!paySalaryTarget) return;
+    setPaySalaryLoading(true);
     try {
-      const res = await adminApi.paySalary(partner._id);
-      if (res.success) {
-        toast(`Salary of ₹${partner.unpaidEarnings.toLocaleString('en-IN')} paid successfully to ${partner.fullName}!`, 'success');
-        fetchDeliveryPartners();
+      const res = await adminApi.paySalary(paySalaryTarget._id);
+      if (res.success && res.paymentSessionId) {
+        setPaySalaryTarget(null);
+        // Launch Cashfree checkout using the same SDK loaded on the customer checkout page
+        const CashfreeLib = (window as any).Cashfree;
+        if (!CashfreeLib) {
+          toast('Cashfree SDK is not loaded. Please refresh and try again.', 'error');
+          return;
+        }
+        const cashfree = CashfreeLib({ mode: 'sandbox' });
+        await cashfree.checkout({
+          paymentSessionId: res.paymentSessionId,
+          returnUrl: `${window.location.origin}/admin?tab=employees&verify_payout=${res.orderId}&partner_id=${paySalaryTarget._id}`,
+        });
+      } else {
+        toast(res.message || 'Failed to initiate payment', 'error');
       }
     } catch (err: any) {
       toast(err.message || 'Failed to pay salary', 'error');
+    } finally {
+      setPaySalaryLoading(false);
     }
   }
 
   async function handleRecordRemittance(partner: any) {
     if ((partner.cashInHand ?? 0) <= 0) return;
-    const confirmRemit = window.confirm(`Record cash remittance from ${partner.fullName}?\n\nThis confirms you have physically received ₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} in COD cash from this delivery partner.`);
-    if (!confirmRemit) return;
+    setRemittanceTarget(partner);
+  }
 
+  async function executeRecordRemittance() {
+    if (!remittanceTarget) return;
+    setRemittanceLoading(true);
     try {
-      const res = await adminApi.recordRemittance(partner._id);
+      const res = await adminApi.recordRemittance(remittanceTarget._id);
       if (res.success) {
-        toast(`₹${(partner.cashInHand ?? 0).toLocaleString('en-IN')} COD cash remittance recorded for ${partner.fullName}!`, 'success');
+        toast(`₹${(remittanceTarget.cashInHand ?? 0).toLocaleString('en-IN')} COD cash remittance recorded for ${remittanceTarget.fullName}!`, 'success');
+        setRemittanceTarget(null);
         fetchDeliveryPartners();
       }
     } catch (err: any) {
       toast(err.message || 'Failed to record remittance', 'error');
+    } finally {
+      setRemittanceLoading(false);
     }
   }
 
@@ -727,7 +784,7 @@ export function Admin() {
       setCoupons(prev => prev.filter(c => c._id !== deleteCouponTarget._id));
       setDeleteCouponTarget(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete coupon');
+      toast(err.message || 'Failed to delete coupon', 'error');
     } finally {
       setDeleteCouponLoading(false);
     }
@@ -741,7 +798,7 @@ export function Admin() {
       setPartners(prev => prev.filter(p => p._id !== deletePartnerTarget._id));
       setDeletePartnerTarget(null);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete');
+      toast(err.message || 'Failed to delete', 'error');
     } finally { setDeletePartnerLoading(false); }
   }
 
@@ -812,6 +869,7 @@ export function Admin() {
   const STATUS_BADGE: Record<string, any> = {
     pending: 'warning', confirmed: 'default', processing: 'default',
     shipped: 'dark', delivered: 'success', cancelled: 'error',
+    refunded: 'error', return_requested: 'warning',
   };
 
   const fmt = (p: number) => '₹' + p.toLocaleString('en-IN');
@@ -1057,13 +1115,15 @@ export function Admin() {
                         { label: 'Shipped', value: 'shipped' },
                         { label: 'Delivered', value: 'delivered' },
                         { label: 'Cancelled', value: 'cancelled' },
+                        { label: 'Refunded', value: 'refunded' },
+                        { label: 'Return Requested', value: 'return_requested' },
                       ]} />
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {ordersPage.map((o: any) => (
-                    <tr key={o._id} className="hover:bg-gray-50">
+                    <tr key={o._id} className="hover:bg-gray-50" style={{ height: '53px' }}>
                       <td className="px-4 py-3 font-bold text-gray-900">#{o.orderNumber}</td>
                       <td className="px-4 py-3 text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-gray-600">{o.items?.length ?? 0}</td>
@@ -1072,7 +1132,16 @@ export function Admin() {
                     </tr>
                   ))}
                   {ordersPage.length === 0 && (
-                    <tr><td colSpan={5} className="px-4 py-12 text-center text-gray-400 text-sm">No orders found</td></tr>
+                    <tr style={{ height: `${ordersPageSize * 53}px` }}>
+                      <td colSpan={5} className="text-center text-gray-400 text-sm align-middle">No orders found</td>
+                    </tr>
+                  )}
+                  {ordersPage.length > 0 && ordersPage.length < ordersPageSize && (
+                    Array.from({ length: ordersPageSize - ordersPage.length }).map((_, idx) => (
+                      <tr key={`empty-${idx}`} style={{ height: '53px' }}>
+                        <td colSpan={5} className="px-4 py-3">&nbsp;</td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
@@ -2243,6 +2312,58 @@ export function Admin() {
                 className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
                 {deleteCouponLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pay Salary Confirmation Modal ── */}
+      {paySalaryTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <IndianRupee className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 text-center mb-1">Pay Salary?</h3>
+            <div className="text-sm text-gray-500 text-center mb-6">
+              Are you sure you want to mark salary as paid for <span className="font-semibold text-gray-700">{paySalaryTarget.fullName}</span>?<br/><br/>
+              This will clear their pending payout of <span className="font-bold text-gray-900">₹{paySalaryTarget.unpaidEarnings.toLocaleString('en-IN')}</span> and reset it to ₹0.
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setPaySalaryTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={executePaySalary} disabled={paySalaryLoading}
+                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {paySalaryLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Confirm Pay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Record Remittance Confirmation Modal ── */}
+      {remittanceTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Banknote className="w-6 h-6 text-orange-600" />
+            </div>
+            <h3 className="text-lg font-black text-gray-900 text-center mb-1">Record Cash Remittance?</h3>
+            <div className="text-sm text-gray-500 text-center mb-6">
+              Confirm cash remittance from <span className="font-semibold text-gray-700">{remittanceTarget.fullName}</span>?<br/><br/>
+              This confirms you have physically received <span className="font-bold text-gray-900">₹{(remittanceTarget.cashInHand ?? 0).toLocaleString('en-IN')}</span> in COD cash from this delivery partner.
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setRemittanceTarget(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                Cancel
+              </button>
+              <button onClick={executeRecordRemittance} disabled={remittanceLoading}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                {remittanceLoading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Confirm Receipt
               </button>
             </div>
           </div>

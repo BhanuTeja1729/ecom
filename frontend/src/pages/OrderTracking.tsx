@@ -67,6 +67,26 @@ export function OrderTracking() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [returnReason, setReturnReason] = useState('Defective Item');
+  const [returnDescription, setReturnDescription] = useState('');
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+
+  async function handleRequestReturn() {
+    if (!order) return;
+    setSubmittingReturn(true);
+    try {
+      const res = await orderApi.requestReturn(order.orderNumber, returnReason, returnDescription || undefined);
+      setOrder(res.data);
+      setShowReturnModal(false);
+      setReturnReason('Defective Item');
+      setReturnDescription('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to request return.');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  }
 
   // Auto-load order from query param
   useEffect(() => {
@@ -145,7 +165,9 @@ export function OrderTracking() {
 
   const currentStepIndex = order ? STEPS.findIndex(s => s.status === order.status) : -1;
   const fmt = (p: number) => '₹' + p.toLocaleString('en-IN');
-  const isCancelled = order?.status === 'cancelled' || order?.status === 'refunded';
+  const isReturnRequested = order?.status === 'return_requested';
+  const isReturnedRefund = order?.status === 'refunded' && !!order?.returnReason;
+  const isCancelled = (order?.status === 'cancelled' || order?.status === 'refunded') && !isReturnedRefund;
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -305,7 +327,74 @@ export function OrderTracking() {
                     <XCircle className="w-3 h-3" /> Cancel Order
                   </button>
                 )}
+                {/* Return button — only for delivered orders that haven't been returned/refunded */}
+                {order.status === 'delivered' && order.paymentStatus !== 'refunded' && (
+                  <button
+                    onClick={() => setShowReturnModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 text-xs font-bold rounded-full border border-amber-200 hover:bg-amber-150 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Return / Refund (Defect)
+                  </button>
+                )}
               </div>
+
+              {/* Return Modal */}
+              {showReturnModal && (
+                <div className="mb-4 p-5 bg-amber-50/50 border-2 border-amber-200 rounded-2xl animate-in space-y-4">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5 text-amber-600" />
+                    <p className="font-black text-amber-900 text-base">Request Return & Refund for Defective Order</p>
+                  </div>
+                  <p className="text-xs text-amber-700 font-medium">
+                    If your order has a defect, you can request a refund. We will assign a delivery partner to collect the package from you. Please select the reason and describe the defect.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 mb-1 block">Reason for Return</label>
+                      <select
+                        value={returnReason}
+                        onChange={e => setReturnReason(e.target.value)}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:border-amber-500 outline-none font-semibold text-gray-850"
+                      >
+                        <option value="Defective Item">Defective Item / Functional Failure</option>
+                        <option value="Item Damaged on Arrival">Package / Item Damaged on Arrival</option>
+                        <option value="Incorrect Item Received">Wrong / Incorrect Item Received</option>
+                        <option value="Poor Quality">Quality not as expected</option>
+                        <option value="Other">Other Reason</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 mb-1 block">Describe the defect / issue (optional)</label>
+                      <textarea
+                        value={returnDescription}
+                        onChange={e => setReturnDescription(e.target.value)}
+                        placeholder="Provide details about the defect in the product..."
+                        rows={3}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:border-amber-500 outline-none resize-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2.5 pt-1">
+                    <button
+                      onClick={handleRequestReturn}
+                      disabled={submittingReturn}
+                      className="px-5 py-2.5 bg-gray-900 hover:bg-amber-600 text-white text-xs font-black rounded-xl transition-colors disabled:opacity-60 flex items-center gap-1.5 shadow-sm"
+                    >
+                      {submittingReturn ? (
+                        <><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Submitting...</>
+                      ) : (
+                        <><Check className="w-3.5 h-3.5" /> Submit Return Request</>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { setShowReturnModal(false); setReturnReason('Defective Item'); setReturnDescription(''); }}
+                      className="px-4 py-2 border border-gray-200 text-gray-600 text-xs font-bold rounded-xl hover:bg-gray-55 transition-colors bg-white shadow-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Cancel confirmation dialog */}
               {showCancelConfirm && (
@@ -348,7 +437,7 @@ export function OrderTracking() {
               )}
 
               {/* Progress tracker */}
-              {!isCancelled && (
+              {!isCancelled && !isReturnRequested && !isReturnedRefund && (
                 <div className="relative pt-2 pb-4">
                   {/* Progress bar background */}
                   <div className="absolute top-7 left-0 right-0 h-1 bg-gray-100 rounded-full mx-8" />
@@ -397,6 +486,99 @@ export function OrderTracking() {
                 </div>
               )}
 
+              {/* Return Tracking UI */}
+              {isReturnRequested && (
+                <div className="border-t border-gray-100 pt-6 mt-6 space-y-6">
+                  {/* Return status description banner */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 animate-bounce-slow" />
+                    <div>
+                      <p className="font-bold text-amber-800 text-sm">Return & Refund Request Active</p>
+                      <p className="text-xs text-amber-750 mt-1 font-medium leading-relaxed">
+                        You requested a return for this order due to: <span className="font-bold text-amber-900">"{order.returnReason}"</span>.
+                        {order.returnDescription && <span> Description: "{order.returnDescription}"</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Return code banner */}
+                  {order.returnCode && (
+                    <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 shadow-lg text-white">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                          <KeyRound className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-black text-lg">Return Verification Code</p>
+                          <p className="text-indigo-255 text-xs">Share this code with the delivery partner when they pick up your return package</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-center gap-2 my-4">
+                        {order.returnCode.split('').map((digit: string, i: number) => (
+                          <div
+                            key={i}
+                            className="w-12 h-14 bg-white/20 backdrop-blur border-2 border-white/30 rounded-xl flex items-center justify-center text-2xl font-black text-white shadow-inner"
+                          >
+                            {digit}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-4 p-3 bg-white/10 rounded-xl">
+                        <Shield className="w-4 h-4 text-indigo-200 shrink-0" />
+                        <p className="text-xs text-indigo-100">
+                          <strong>Verify Package Collection:</strong> Share this code only after handing over the defective item(s) to the delivery agent. The agent will enter it to verify pickup, and your refund will be completed automatically.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Return Progress Timeline */}
+                  <div className="relative pt-2 pb-4">
+                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 text-center sm:text-left">Return Progress</h4>
+                    {/* Progress bar background */}
+                    <div className="absolute top-11 left-0 right-0 h-1 bg-gray-100 rounded-full mx-8 hidden sm:block" />
+                    
+                    {/* Active progress bar */}
+                    <div
+                      className="absolute top-11 left-0 h-1 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full mx-8 transition-all duration-1000 ease-out hidden sm:block"
+                      style={{ width: order.assignedDeliveryPartner ? '50%' : '0%' }}
+                    />
+
+                    <div className="relative flex flex-col sm:flex-row justify-between gap-6 sm:gap-0">
+                      {[
+                        { label: 'Return Requested', active: true, desc: 'Return initiated for defective item' },
+                        { label: 'Agent Assigned', active: !!order.assignedDeliveryPartner, desc: order.assignedDeliveryPartner ? 'A pickup agent has claimed your return pickup task' : 'Awaiting assignment of a pickup agent' },
+                        { label: 'Refund Completed', active: false, desc: 'Will be completed once agent collects package' }
+                      ].map((step, idx) => {
+                        return (
+                          <div key={idx} className="flex flex-row sm:flex-col items-center sm:flex-1 gap-3 sm:gap-0 group">
+                            <div className={`
+                              w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-500 relative z-10 shrink-0
+                              ${step.active
+                                ? 'bg-gradient-to-br from-amber-400 to-amber-500 border-amber-400 text-white shadow-md'
+                                : 'bg-white border-gray-200 text-gray-300'
+                              }
+                            `}>
+                              {step.active ? <Check className="w-4 h-4" /> : <span>{idx + 1}</span>}
+                            </div>
+                            <div className="sm:text-center mt-0 sm:mt-2.5">
+                              <p className={`text-xs font-bold transition-colors ${step.active ? 'text-amber-600 font-black' : 'text-gray-400'}`}>
+                                {step.label}
+                              </p>
+                              <p className="text-[10px] text-gray-400 mt-0.5 max-w-[150px]">
+                                {step.desc}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Cancelled/Refunded status */}
               {isCancelled && (
                 <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
@@ -404,8 +586,21 @@ export function OrderTracking() {
                     This order has been {order.status}.
                   </p>
                   <p className="text-xs text-red-600 mt-1">
-                    {order.status === 'refunded' ? 'A refund has been initiated to your original payment method.' : 'If you have questions, please contact our support team.'}
+                    A refund has been initiated to your original payment method. If you have questions, please contact our support team.
                   </p>
+                </div>
+              )}
+
+              {/* Returned & Refunded status */}
+              {isReturnedRefund && (
+                <div className="p-4 bg-emerald-50 border border-emerald-150 rounded-2xl flex gap-3 items-center">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 animate-pulse" />
+                  <div>
+                    <p className="font-black text-emerald-800 text-sm">Return Completed & Refunded</p>
+                    <p className="text-xs text-emerald-700 mt-0.5 font-medium leading-relaxed">
+                      Your return package has been collected and verified by our delivery partner. A refund of <strong>{fmt(order.total)}</strong> has been processed to your original payment method.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

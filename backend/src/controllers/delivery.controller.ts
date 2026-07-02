@@ -10,12 +10,15 @@ function generateDeliveryCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// 1. Get available orders (unassigned orders that are confirmed or processing)
+// 1. Get available orders (unassigned orders that are confirmed, processing, or return_requested)
 export async function getAvailableOrders(req: Request, res: Response, next: NextFunction) {
   try {
     const orders = await Order.find({
-      status: { $in: ['confirmed', 'processing'] },
-      assignedDeliveryPartner: { $exists: false }
+      status: { $in: ['confirmed', 'processing', 'return_requested'] },
+      $or: [
+        { assignedDeliveryPartner: { $exists: false } },
+        { assignedDeliveryPartner: null }
+      ]
     })
     .sort({ createdAt: -1 })
     .populate('user', 'fullName email phone')
@@ -37,9 +40,9 @@ export async function getAssignedOrders(req: Request & { user?: any }, res: Resp
 
     const query: any = { assignedDeliveryPartner: partnerId };
     if (type === 'active') {
-      query.status = { $in: ['confirmed', 'processing', 'shipped'] };
+      query.status = { $in: ['confirmed', 'processing', 'shipped', 'return_requested'] };
     } else {
-      query.status = { $in: ['delivered'] };
+      query.status = { $in: ['delivered', 'refunded'] };
     }
 
     const orders = await Order.find(query)
@@ -68,8 +71,8 @@ export async function claimOrder(req: Request & { user?: any }, res: Response, n
       throw createError('Order has already been assigned to another delivery partner', 400);
     }
 
-    if (!['confirmed', 'processing'].includes(order.status)) {
-      throw createError('Only confirmed or processing orders can be claimed', 400);
+    if (!['confirmed', 'processing', 'return_requested'].includes(order.status)) {
+      throw createError('Only confirmed, processing, or return requested orders can be claimed', 400);
     }
 
     order.assignedDeliveryPartner = partnerId as any;
@@ -79,9 +82,12 @@ export async function claimOrder(req: Request & { user?: any }, res: Response, n
       order.status = 'processing';
     }
 
+    const isReturn = order.status === 'return_requested';
     order.statusHistory.push({
       status: order.status,
-      message: 'Delivery partner assigned. Preparing order for dispatch.',
+      message: isReturn 
+        ? 'Delivery partner assigned for return package pickup.'
+        : 'Delivery partner assigned. Preparing order for dispatch.',
       timestamp: new Date()
     });
 
@@ -170,17 +176,27 @@ export async function verifyDeliveryCode(req: Request & { user?: any }, res: Res
       throw createError('Invalid delivery code. Please ask the customer for the correct code.', 400);
     }
 
+    const isOnline = order.paymentMethod === 'online' || order.paymentMethod === 'cashfree';
+
     // Code matches — mark as delivered
     order.status = 'delivered';
     order.deliveredAt = new Date();
-    order.paymentStatus = 'paid'; // Cash collected on delivery
+    order.paymentStatus = 'paid';
     order.deliveryCode = undefined; // Clear the code after use
-    order.codAmount = order.total;  // Record the cash amount collected from customer
-    order.codCashStatus = 'with_partner'; // Partner now holds this cash — must remit to admin
+
+    if (isOnline) {
+      order.codAmount = 0;
+      order.codCashStatus = 'not_applicable';
+    } else {
+      order.codAmount = order.total;  // Record the cash amount collected from customer
+      order.codCashStatus = 'with_partner'; // Partner now holds this cash — must remit to admin
+    }
 
     order.statusHistory.push({
       status: 'delivered',
-      message: 'Delivery confirmed with customer verification code. Cash collected.',
+      message: isOnline
+        ? 'Delivery confirmed with customer verification code. Prepaid order.'
+        : 'Delivery confirmed with customer verification code. Cash collected.',
       timestamp: new Date()
     });
 
@@ -223,15 +239,15 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         } catch (migErr) {
           console.error('[Migration] Dynamic update failed:', migErr);
         }
-        return Order.countDocuments({ assignedDeliveryPartner: partnerId, status: 'delivered' });
+        return Order.countDocuments({ assignedDeliveryPartner: partnerId, status: { $in: ['delivered', 'refunded'] } });
       })(),
-      Order.countDocuments({ assignedDeliveryPartner: partnerId, status: { $in: ['confirmed', 'processing', 'shipped'] } })
+      Order.countDocuments({ assignedDeliveryPartner: partnerId, status: { $in: ['confirmed', 'processing', 'shipped', 'return_requested'] } })
     ]);
 
     // Earnings: sum of completed delivery payouts (with fallback to 0)
     const partnerMongoId = new mongoose.Types.ObjectId(partnerId);
     const earningsAggregate = await Order.aggregate([
-      { $match: { assignedDeliveryPartner: partnerMongoId, status: 'delivered' } },
+      { $match: { assignedDeliveryPartner: partnerMongoId, status: { $in: ['delivered', 'refunded'] } } },
       {
         $group: {
           _id: null,
@@ -254,9 +270,8 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
     // Get flat delivery payout
     const flatDeliveryPayout = await getSettingValue('flatDeliveryPayout', 50);
 
-    // Cash flow: how much customer cash the partner is currently holding vs. already remitted
     const cashFlowAggregate = await Order.aggregate([
-      { $match: { assignedDeliveryPartner: partnerMongoId, status: 'delivered' } },
+      { $match: { assignedDeliveryPartner: partnerMongoId, status: 'delivered', paymentMethod: { $nin: ['online', 'cashfree'] } } },
       {
         $group: {
           _id: null,
@@ -296,6 +311,91 @@ export async function getDeliveryStats(req: Request & { user?: any }, res: Respo
         deliveryRatePerKm: flatDeliveryPayout
       }
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// 7. Verify the 6-digit return code and mark order as refunded
+export async function verifyReturnCode(req: Request & { user?: any }, res: Response, next: NextFunction) {
+  try {
+    const partnerId = req.user?.id;
+    if (!partnerId) throw createError('Unauthorized access', 401);
+
+    const { id } = req.params;
+    const { code } = z.object({ code: z.string().length(6) }).parse(req.body);
+
+    const order = await Order.findById(id);
+    if (!order) throw createError('Order not found', 404);
+
+    // Guard: Only allow the assigned partner or an admin
+    if (order.assignedDeliveryPartner?.toString() !== partnerId && req.user?.role !== 'admin') {
+      throw createError('You are not authorized to verify this return pickup', 403);
+    }
+
+    if (order.status !== 'return_requested') {
+      throw createError('Order must be in "return_requested" status to verify return', 400);
+    }
+
+    if (!order.returnCode) {
+      throw createError('No return code found for this order', 400);
+    }
+
+    if (order.returnCode !== code) {
+      throw createError('Invalid return code. Please check with the customer.', 400);
+    }
+
+    // Code matches — initiate refund for online payments
+    const isOnlineRefund = (order.paymentMethod === 'cashfree' || order.paymentMethod === 'online') && order.paymentStatus === 'paid';
+
+    if (isOnlineRefund) {
+      const cashfreeAppId = process.env.CASHFREE_APP_ID;
+      const cashfreeSecret = process.env.CASHFREE_SECRET_KEY;
+      const cashfreeEnv = process.env.CASHFREE_ENV || 'sandbox';
+
+      const cashfreeUrl = cashfreeEnv === 'production'
+        ? `https://api.cashfree.com/pg/orders/${order.orderNumber}/refunds`
+        : `https://sandbox.cashfree.com/pg/orders/${order.orderNumber}/refunds`;
+
+      const refundId = `ref_${order.orderNumber}_${Date.now()}`;
+      const refundBody = {
+        refund_amount: order.total,
+        refund_id: refundId,
+        refund_note: `Return pickup verified by delivery partner`
+      };
+
+      const refundResponse = await fetch(cashfreeUrl, {
+        method: 'POST',
+        headers: {
+          'x-api-version': '2023-08-01',
+          'x-client-id': cashfreeAppId || '',
+          'x-client-secret': cashfreeSecret || '',
+          'x-idempotency-key': new mongoose.Types.ObjectId().toString(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(refundBody)
+      });
+
+      if (!refundResponse.ok) {
+        const errBody = (await refundResponse.json().catch(() => ({}))) as any;
+        console.error('Cashfree refund API error:', errBody);
+        throw createError(errBody.message || `Cashfree refund failed with HTTP ${refundResponse.status}`, 400);
+      }
+    }
+
+    order.status = 'refunded';
+    order.paymentStatus = 'refunded';
+    order.returnCode = undefined; // Clear the code after use
+
+    order.statusHistory.push({
+      status: 'refunded',
+      message: 'Return package picked up and verified by delivery partner. Refund successfully completed.',
+      timestamp: new Date()
+    });
+
+    await order.save();
+
+    res.json({ success: true, data: order });
   } catch (err) {
     next(err);
   }

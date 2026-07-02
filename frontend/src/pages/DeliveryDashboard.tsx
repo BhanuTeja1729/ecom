@@ -18,7 +18,8 @@ const ORDER_STATUS_DETAILS: Record<string, { variant: 'default' | 'success' | 'w
   shipped: { variant: 'dark', label: 'Out for Delivery' },
   delivered: { variant: 'success', label: 'Delivered' },
   cancelled: { variant: 'error', label: 'Cancelled' },
-  refunded: { variant: 'error', label: 'Refunded' },
+  refunded: { variant: 'success', label: 'Returned & Refunded' },
+  return_requested: { variant: 'warning', label: 'Return Pickup' },
 };
 
 export function DeliveryDashboard() {
@@ -176,6 +177,30 @@ export function DeliveryDashboard() {
       }
     } catch (err: any) {
       setCodeError(e => ({ ...e, [orderId]: err.message || 'Invalid code. Please try again.' }));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Action: Verify 6-digit return code and mark as refunded
+  async function handleVerifyReturnCode(orderId: string, orderNumber: string) {
+    const code = deliveryCodes[orderId] ?? '';
+    if (code.length !== 6) {
+      setCodeError(e => ({ ...e, [orderId]: 'Please enter the full 6-digit code.' }));
+      return;
+    }
+    setActionLoading(orderId);
+    setCodeError(e => ({ ...e, [orderId]: '' }));
+    try {
+      const res = await deliveryApi.verifyReturnCode(orderId, code);
+      if (res.success) {
+        toast(`Order #${orderNumber} return package picked up & verified! Refund completed. ✅`, 'success');
+        loadStats();
+        loadActiveOrders();
+        setTab('history');
+      }
+    } catch (err: any) {
+      setCodeError(e => ({ ...e, [orderId]: err.message || 'Invalid return code. Please try again.' }));
     } finally {
       setActionLoading(null);
     }
@@ -482,25 +507,37 @@ export function DeliveryDashboard() {
                               </div>
                             )}
                           </div>
-
-                          {/* Step Tracker Visual */}
+                                  {/* Step Tracker Visual */}
                           <div className="mb-6">
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">Delivery Progress</h4>
-                            <div className="flex items-center w-full">
-                              {[
-                                { statusKey: 'processing', label: 'Assigned' },
-                                { statusKey: 'shipped', label: 'Out for Delivery' },
-                                { statusKey: 'delivered', label: 'Delivered' }
-                              ].map((step, idx) => {
-                                const statuses = ['processing', 'shipped', 'delivered'];
-                                const currentIdx = statuses.indexOf(order.status);
-                                const stepIdx = statuses.indexOf(step.statusKey);
-                                const isCompleted = stepIdx <= currentIdx;
-                                const isActive = stepIdx === currentIdx;
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-3">
+                              {order.status === 'return_requested' ? 'Return Pickup Progress' : 'Delivery Progress'}
+                            </h4>
+                            {order.status === 'return_requested' ? (
+                              <div className="bg-amber-50 border border-amber-250 p-4 rounded-xl flex gap-3">
+                                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs font-bold text-amber-800">Return Pickup Task Active</p>
+                                  <p className="text-[10px] text-amber-700 font-semibold mt-1">
+                                    Defect reported: "{order.returnReason || 'Defective Item'}"
+                                    {order.returnDescription && <span> - "{order.returnDescription}"</span>}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center w-full">
+                                {[
+                                  { statusKey: 'processing', label: 'Assigned' },
+                                  { statusKey: 'shipped', label: 'Out for Delivery' },
+                                  { statusKey: 'delivered', label: 'Delivered' }
+                                ].map((step, idx) => {
+                                  const statuses = ['processing', 'shipped', 'delivered'];
+                                  const currentIdx = statuses.indexOf(order.status);
+                                  const stepIdx = statuses.indexOf(step.statusKey);
+                                  const isCompleted = stepIdx <= currentIdx;
+                                  const isActive = stepIdx === currentIdx;
 
-                                return (
-                                  <div key={step.statusKey} className="flex items-center flex-1 last:flex-initial">
-                                    <div className="flex flex-col items-center relative">
+                                  return (
+                                    <div key={step.statusKey} className="flex items-center flex-1 last:flex-initial">
                                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${isCompleted ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-400 border border-gray-200'
                                         } ${isActive ? 'ring-4 ring-amber-100 scale-110' : ''}`}>
                                         {stepIdx < currentIdx ? <CheckCircle2 className="w-4 h-4" /> : idx + 1}
@@ -509,37 +546,32 @@ export function DeliveryDashboard() {
                                         }`}>
                                         {step.label}
                                       </span>
+                                      {idx < 2 && (
+                                        <div className={`h-1 flex-1 mx-2 rounded-full transition-all ${stepIdx < currentIdx ? 'bg-amber-500' : 'bg-gray-200'
+                                          }`} />
+                                      )}
                                     </div>
-                                    {idx < 2 && (
-                                      <div className={`h-1 flex-1 mx-2 rounded-full transition-all ${stepIdx < currentIdx ? 'bg-amber-500' : 'bg-gray-200'
-                                        }`} />
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
 
                           {/* RouteMap view */}
                           {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (() => {
+                            const isReturn = order.status === 'return_requested';
                             const isPreparing = order.status === 'processing';
-                            const startLat = partnerCoords?.lat ?? inventoryCoords.lat;
-                            const startLng = partnerCoords?.lng ?? inventoryCoords.lng;
-                            const endLat = partnerCoords 
-                              ? (isPreparing ? inventoryCoords.lat : order.shippingAddress.latitude)
-                              : order.shippingAddress.latitude;
-                            const endLng = partnerCoords 
-                              ? (isPreparing ? inventoryCoords.lng : order.shippingAddress.longitude)
-                              : order.shippingAddress.longitude;
-                            const startName = partnerCoords ? "Your Live Location" : "BLIPZO Warehouse";
-                            const endName = partnerCoords
-                              ? (isPreparing ? "BLIPZO Warehouse (Pickup)" : (order.shippingAddress.fullName || 'Customer Location'))
-                              : (order.shippingAddress.fullName || 'Customer Location');
+                            const startLat = partnerCoords?.lat ?? (isReturn ? order.shippingAddress.latitude : inventoryCoords.lat);
+                            const startLng = partnerCoords?.lng ?? (isReturn ? order.shippingAddress.longitude : inventoryCoords.lng);
+                            const endLat = isReturn ? inventoryCoords.lat : (partnerCoords && isPreparing ? inventoryCoords.lat : order.shippingAddress.latitude);
+                            const endLng = isReturn ? inventoryCoords.lng : (partnerCoords && isPreparing ? inventoryCoords.lng : order.shippingAddress.longitude);
+                            const startName = partnerCoords ? "Your Live Location" : (isReturn ? (order.shippingAddress.fullName || 'Customer Location') : "BLIPZO Warehouse");
+                            const endName = isReturn ? "BLIPZO Warehouse (Return)" : (partnerCoords && isPreparing ? "BLIPZO Warehouse (Pickup)" : (order.shippingAddress.fullName || 'Customer Location'));
 
                             return (
                               <div className="mb-6 mt-4">
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
-                                  {partnerCoords ? 'Live Navigation Map' : 'Delivery Location Map'}
+                                  {partnerCoords ? 'Live Navigation Map' : (isReturn ? 'Return Route Map' : 'Delivery Location Map')}
                                 </h4>
                                 <RouteMap
                                   startLat={startLat}
@@ -567,7 +599,7 @@ export function DeliveryDashboard() {
                               Open Google Maps
                             </a>
 
-                            <div className="flex flex-col gap-2 items-end">
+                            <div className="flex flex-col gap-2 items-end w-full sm:w-auto">
                               {order.status === 'processing' && (
                                 <button
                                   onClick={() => handleUpdateStatus(order._id, 'shipped', order.orderNumber)}
@@ -633,6 +665,57 @@ export function DeliveryDashboard() {
                                   </div>
                                 </div>
                               )}
+
+                              {/* Code verification form for return_requested orders */}
+                              {order.status === 'return_requested' && (
+                                <div className="w-full">
+                                  <div className="bg-gradient-to-br from-amber-50 to-orange-55 border-2 border-amber-200 rounded-xl p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
+                                        <KeyRound className="w-4 h-4 text-amber-600 animate-spin-slow" />
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-black text-amber-800">Enter Customer's Return Code</p>
+                                        <p className="text-xs text-amber-600 font-medium">Collect the defective package and ask for their 6-digit return code</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                      <input
+                                        type="text"
+                                        maxLength={6}
+                                        value={deliveryCodes[order._id] ?? ''}
+                                        onChange={e => {
+                                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                          setDeliveryCodes(c => ({ ...c, [order._id]: val }));
+                                          setCodeError(err => ({ ...err, [order._id]: '' }));
+                                        }}
+                                        placeholder="Enter 6-digit code"
+                                        className="flex-1 border-2 border-amber-205 focus:border-amber-500 rounded-xl px-4 py-2.5 text-center text-lg font-black tracking-[0.3em] text-amber-900 outline-none bg-white transition-colors"
+                                      />
+                                      <button
+                                        onClick={() => handleVerifyReturnCode(order._id, order.orderNumber)}
+                                        disabled={actionLoading === order._id || (deliveryCodes[order._id] ?? '').length !== 6}
+                                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                                      >
+                                        {actionLoading === order._id ? (
+                                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                          <CheckCircle2 className="w-3.5 h-3.5" />
+                                        )}
+                                        Confirm Return Pickup
+                                      </button>
+                                    </div>
+
+                                    {codeError[order._id] && (
+                                      <div className="mt-2 flex items-center gap-1.5 text-red-600">
+                                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                        <p className="text-xs font-semibold">{codeError[order._id]}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -669,13 +752,18 @@ export function DeliveryDashboard() {
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-gray-900 text-base">#{order.orderNumber}</span>
-                              <Badge variant="default">Unassigned</Badge>
+                              {order.status === 'return_requested' ? (
+                                <Badge variant="warning">Return Pickup</Badge>
+                              ) : (
+                                <Badge variant="default">Unassigned</Badge>
+                              )}
                               <span className="text-xs text-gray-400">Created: {fmtDate(order.createdAt)}</span>
                             </div>
                             <p className="text-xs text-gray-700 flex items-start gap-1">
                               <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                               <span>
-                                Destination: <span className="font-semibold">{order.shippingAddress.addressLine1}{order.shippingAddress.addressLine2 ? `, ${order.shippingAddress.addressLine2}` : ''}, {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.postalCode}</span>
+                                {order.status === 'return_requested' ? 'Pickup Address: ' : 'Destination: '}
+                                <span className="font-semibold">{order.shippingAddress.addressLine1}{order.shippingAddress.addressLine2 ? `, ${order.shippingAddress.addressLine2}` : ''}, {order.shippingAddress.city}, {order.shippingAddress.state} - {order.shippingAddress.postalCode}</span>
                               </span>
                             </p>
                             <p className="text-xs text-gray-500 flex items-center gap-1.5">
@@ -704,21 +792,23 @@ export function DeliveryDashboard() {
                               ) : (
                                 <Truck className="w-3.5 h-3.5" />
                               )}
-                              Accept Shipment
+                              {order.status === 'return_requested' ? 'Accept Return Pickup' : 'Accept Shipment'}
                             </button>
                           </div>
                         </div>
 
                         {order.shippingAddress?.latitude && order.shippingAddress?.longitude && (
                           <div className="w-full mt-2 border-t border-gray-100 pt-4">
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">Delivery Route Map</h4>
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-2">
+                              {order.status === 'return_requested' ? 'Return Pickup Route Map' : 'Delivery Route Map'}
+                            </h4>
                             <RouteMap
-                              startLat={inventoryCoords.lat}
-                              startLng={inventoryCoords.lng}
-                              endLat={order.shippingAddress.latitude}
-                              endLng={order.shippingAddress.longitude}
-                              startName="BLIPZO Warehouse"
-                              endName={order.shippingAddress.fullName || 'Customer Location'}
+                              startLat={order.status === 'return_requested' ? order.shippingAddress.latitude : inventoryCoords.lat}
+                              startLng={order.status === 'return_requested' ? order.shippingAddress.longitude : inventoryCoords.lng}
+                              endLat={order.status === 'return_requested' ? inventoryCoords.lat : order.shippingAddress.latitude}
+                              endLng={order.status === 'return_requested' ? inventoryCoords.lng : order.shippingAddress.longitude}
+                              startName={order.status === 'return_requested' ? "Customer (Pickup)" : "BLIPZO Warehouse"}
+                              endName={order.status === 'return_requested' ? "BLIPZO Warehouse (Return)" : (order.shippingAddress.fullName || 'Customer Location')}
                               maxDistanceKm={25}
                             />
                           </div>
@@ -757,19 +847,21 @@ export function DeliveryDashboard() {
                   <div className="grid grid-cols-1 gap-4">
                     {historyOrders.map((order) => (
                       <div key={order._id} className={`bg-white rounded-2xl border p-5 shadow-sm transition-colors flex flex-col md:flex-row justify-between md:items-center gap-4 ${
-                        order.codCashStatus === 'with_partner' ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-emerald-100'
+                        order.status === 'delivered' && order.codCashStatus === 'with_partner' ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-emerald-100'
                       }`}>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-gray-900 text-sm">#{order.orderNumber}</span>
-                            <Badge variant="success">Delivered</Badge>
+                            <Badge variant={ORDER_STATUS_DETAILS[order.status]?.variant ?? 'success'}>
+                              {ORDER_STATUS_DETAILS[order.status]?.label ?? order.status}
+                            </Badge>
                             {/* COD Cash Status Chip */}
-                            {order.codCashStatus === 'with_partner' && (
+                            {order.status === 'delivered' && order.codCashStatus === 'with_partner' && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-[10px] font-black rounded-full border border-orange-200">
                                 <Banknote className="w-3 h-3" /> Cash Pending Remittance
                               </span>
                             )}
-                            {order.codCashStatus === 'remitted' && (
+                            {order.status === 'delivered' && order.codCashStatus === 'remitted' && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-full border border-emerald-200">
                                 <SendToBack className="w-3 h-3" /> Cash Remitted
                               </span>
@@ -784,7 +876,7 @@ export function DeliveryDashboard() {
                         </div>
                         <div className="flex flex-col items-start md:items-end gap-1 shrink-0">
                           {/* COD Amount collected */}
-                          {order.codAmount != null && (
+                          {order.status === 'delivered' && order.codAmount != null && (
                             <div className="text-left md:text-right">
                               <span className="text-[10px] text-gray-400 font-bold block uppercase">COD Collected</span>
                               <span className={`font-black text-base ${

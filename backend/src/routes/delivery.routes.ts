@@ -5,7 +5,8 @@ import {
   claimOrder,
   updateDeliveryStatus,
   verifyDeliveryCode,
-  getDeliveryStats
+  getDeliveryStats,
+  verifyReturnCode
 } from '../controllers/delivery.controller';
 import { authenticate, requireDeliveryPartner } from '../middleware/auth';
 
@@ -20,6 +21,7 @@ router.get('/orders/assigned', getAssignedOrders);
 router.put('/orders/:id/claim', claimOrder);
 router.put('/orders/:id/status', updateDeliveryStatus);
 router.post('/orders/:id/verify-code', verifyDeliveryCode);
+router.post('/orders/:id/verify-return', verifyReturnCode);
 router.get('/stats', getDeliveryStats);
 
 export default router;
